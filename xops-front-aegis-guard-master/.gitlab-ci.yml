@@ -1,0 +1,120 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  APP_NAME: "xops-front-aegis-guard"
+  NAMESPACE: "xops"
+  LAYER_NAME: "web"
+  BASE_LABELS: >
+    --label org.opencontainers.image.revision=$CI_COMMIT_SHA 
+    --label org.opencontainers.image.source=$CI_PROJECT_URL 
+    --label com.gitlab.ci.user=$CI_SERVER_URL/$GITLAB_USER_LOGIN 
+    --label com.gitlab.ci.pipelineurl=$CI_PIPELINE_URL
+
+.env_master:
+  variables:
+    ENV_NAME: "release"
+    HARBOR_PROJECT: "xops/master"
+    DOCKER_FILE: "Dockerfile"
+    YAML_PATH: "release"
+    TAG_NAME: "master"
+
+.env_uat:
+  variables:
+    ENV_NAME: "uat"
+    HARBOR_PROJECT: "xops/uat"
+    DOCKER_FILE: "Dockerfile_uat"
+    YAML_PATH: "uat"
+    TAG_NAME: "uat"
+
+.common_build:
+  stage: build
+  image:
+    name: gcr.io/kaniko-project/executor:v1.9.0-debug
+    entrypoint: [""]
+  script:
+    - |
+      IMAGE_FULL_NAME="$HARBOR_HOST/$HARBOR_PROJECT/$APP_NAME"
+      BUILD_DATE=$(date '+%FT%T%z' | sed -E -n 's/(\+[0-9]{2})([0-9]{2})$/\1:\2/p')
+      
+      # 构造标签
+      DESTINATIONS="--destination $IMAGE_FULL_NAME:$CI_COMMIT_BRANCH --destination $IMAGE_FULL_NAME:$CI_COMMIT_SHORT_SHA"
+      if [[ "$CI_COMMIT_BRANCH" == "$CI_DEFAULT_BRANCH" ]]; then
+        DESTINATIONS="$DESTINATIONS --destination $IMAGE_FULL_NAME:latest"
+      fi
+
+      # 动态追加环境 Labels
+      IMAGE_LABELS="$BASE_LABELS --label org.opencontainers.image.created=$BUILD_DATE --label build-date=$BUILD_DATE"
+      
+      # 准备 Docker Auth
+      mkdir -p /kaniko/.docker
+      echo "{\"auths\":{\"$HARBOR_HOST\":{\"auth\":\"$(echo -n $HARBOR_USERNAME:$HARBOR_PASSWORD | base64)\"}}}" > /kaniko/.docker/config.json
+
+      # 执行构建（追加了缓存参数加速）
+      /kaniko/executor --context $CI_PROJECT_DIR \
+        --dockerfile $CI_PROJECT_DIR/$DOCKER_FILE \
+        --cache=true \
+        --cache-copy-layers=true \
+        --cache-dir=/data/data/kaniko/cache \
+        $DESTINATIONS \
+        $IMAGE_LABELS --skip-tls-verify
+
+.common_deploy:
+  stage: deploy
+  image:
+    name: bitnami/kubectl:1.27.5
+    entrypoint: [""]
+  script:
+    - |
+      echo "Deploying to ${ENV_NAME}..."
+      cd manifests/${YAML_PATH}
+
+      # 批量替换模板变量
+      for manifest in deployment.yaml istio.yaml; do
+        if [ ! -f "$manifest" ]; then
+          continue
+        fi
+        sed -i "s|__VERSION__|${CI_COMMIT_SHORT_SHA}|g" "$manifest"
+        sed -i "s|__CI_ENVIRONMENT_NAME__|${ENV_NAME}|g" "$manifest"
+        sed -i "s|__LAYER_NAME__|${LAYER_NAME}|g" "$manifest"
+        sed -i "s|__NAMESPACE__|${NAMESPACE}|g" "$manifest"
+        sed -i "s|__CI_SERVICE_NAME__|${APP_NAME}|g" "$manifest"
+        sed -i "s|__HARBOR_PROJECT__|${HARBOR_PROJECT}|g" "$manifest"
+        sed -i "s|__CI_PROJECT_NAME__|${CI_PROJECT_NAME}|g" "$manifest"
+        cat "./$manifest"
+        kubectl apply -f "./$manifest"
+      done
+      
+      kubectl rollout status deployment/${APP_NAME}-${ENV_NAME} -n ${NAMESPACE}
+      kubectl get pod -l app.kubernetes.io/name=${APP_NAME}-${ENV_NAME} -n ${NAMESPACE}
+
+build_master:
+  extends: [.common_build, .env_master]
+  tags: ["master"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+
+deploy_master:
+  extends: [.common_deploy, .env_master]
+  tags: ["master"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "master"'
+  environment:
+    name: release
+    url: https://sso.zfit888.com
+
+build_uat:
+  extends: [.common_build, .env_uat]
+  tags: ["uat"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "uat"'
+
+deploy_uat:
+  extends: [.common_deploy, .env_uat]
+  tags: ["uat"]
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "uat"'
+  environment:
+    name: uat
+    url: https://sso.zfit888.com

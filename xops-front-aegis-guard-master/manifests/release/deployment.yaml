@@ -1,0 +1,102 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubernetes.io/change-cause: kubectl apply --filename=./ --record=true
+  labels:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+    k8s.kuboard.cn/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    ref: __CI_ENVIRONMENT_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+      ref: __CI_ENVIRONMENT_NAME__
+  template:
+    metadata:
+      labels:
+        app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+        app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+        ref: __CI_ENVIRONMENT_NAME__
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: endpoint
+                    operator: NotIn
+                    values:
+                      - management-endpoint
+              weight: 1
+      containers:
+        - image: harbor.zfit888.com/__HARBOR_PROJECT__/__CI_SERVICE_NAME__:__VERSION__
+          imagePullPolicy: Always
+          name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/nginx/conf.d/
+              name: nginx-confd-config-volume
+            - mountPath: /etc/nginx/nginx.conf
+              name: nginx-config-volume
+              subPath: nginx.conf
+            - mountPath: ./.env
+              name: env
+      restartPolicy: Always
+      imagePullSecrets:
+        - name: harbor-push
+      volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: openresty-confd.conf
+                mode: 493
+                path: ops.conf
+            name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+          name: nginx-confd-config-volume
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: openresty-nginx.conf
+                mode: 493
+                path: nginx.conf
+            name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+          name: nginx-config-volume
+        - configMap:
+            defaultMode: 420
+            items:
+              - key: .env
+                path: .env
+            name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+          name: env
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubernetes.io/change-cause: kubectl apply --filename=./ --record=true
+  labels:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+    k8s.kuboard.cn/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    ref: __CI_ENVIRONMENT_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  type: ClusterIP

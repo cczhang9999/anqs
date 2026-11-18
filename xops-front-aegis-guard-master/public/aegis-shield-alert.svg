@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-labelledby="title desc">
+  <title id="title">安骑士告警</title>
+  <desc id="desc">盾牌与告警标记</desc>
+  <path fill="#18a394" d="M12 2 4 5v6c0 5.55 3.84 10.74 8 12 4.16-1.26 8-6.45 8-12V5l-8-3Zm0 2.19 6 2.25V11c0 4.52-2.96 8.5-6 9.56C8.96 19.5 6 15.52 6 11V6.44l6-2.25Z"/>
+  <path fill="#e45b5b" d="M11 7h2v6h-2V7Zm0 8h2v2h-2v-2Z"/>
+</svg>

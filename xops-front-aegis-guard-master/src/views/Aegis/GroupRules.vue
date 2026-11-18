@@ -35,6 +35,7 @@ interface PreviewItem {
   department_name: string
   rule_id: number
   rule_name: string
+  match_conditions: Condition[]
 }
 
 // 主机名比较区分大小写；保留 equals 的展示名称以兼容已有规则。
@@ -387,7 +388,7 @@ onMounted(load)
         </el-form-item>
         <el-form-item label="匹配条件">
           <div class="condition-editor">
-            <p class="condition-hint">多个条件之间需全部满足；一个条件里用逗号隔开多个值=任一满足（否定类为都不能出现）；主机名区分大小写。</p>
+            <p class="condition-hint">多个条件之间需全部满足；一个条件里用逗号隔开多个值=任一满足（否定类为都不能出现）。正则只匹配主机名，主机名区分大小写；匹配内网 IP 或网段请选“IP 属于”并填写 IP/CIDR。</p>
             <div v-for="(condition, index) in form.conditions" :key="index" class="condition-row-wrap">
               <div class="condition-row">
                 <el-select v-model="condition.operator" class="operator-select" @change="errors.rows[index] = ''">
@@ -410,7 +411,7 @@ onMounted(load)
               </div>
               <p v-if="errors.rows[index]" class="row-error">{{ errors.rows[index] }}</p>
               <div v-if="isRegex(condition.operator)" class="regex-panel">
-                <p class="regex-title">正则匹配案例：</p>
+                <p class="regex-title">正则只检查主机名，不检查内网 IP。主机名匹配案例：</p>
                 <p>① <code>(^|-)ai(-|$)</code>：<b>ai</b> 必须是独立的一段 → 命中 <code>aws-hk-ai-infer-019</code>，不会误中 <code>chainup-prod-node-001</code></p>
                 <p>② <code>^(aws|hwc)-hk-</code>：以 <code>aws-hk-</code> 或 <code>hwc-hk-</code> 开头 → 命中 <code>hwc-hk-zf-prod-dc-api-006</code>，不命中 <code>aws-sg-tx-gateway-015</code></p>
                 <p>③ <code>-db\d{3}$</code>：以 <code>-db</code> 加三位数字结尾 → 命中 <code>zy-nph-test-ops-jumpserver-db022</code>，不命中 <code>aws-hk-zf-prod-db-mysql-014</code></p>
@@ -439,7 +440,8 @@ onMounted(load)
         本次可自动归属 <b>{{ preview.matched_total }}</b> 台，其余 <b>{{ preview.total_unassigned - preview.matched_total }}</b> 台仍未命中、保持未分配。
       </div>
       <el-table v-if="preview.matched_total > 0" v-loading="previewLoading" :data="previewItems" stripe size="small">
-        <el-table-column prop="instance_name" label="主机名" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="instance_name" label="主机名" min-width="210" show-overflow-tooltip />
+        <el-table-column prop="private_ip" label="内网 IP" min-width="130" show-overflow-tooltip />
         <el-table-column label="当前" width="110">
           <template #default><el-tag type="info" size="small" effect="plain">未分组</el-tag></template>
         </el-table-column>
@@ -449,7 +451,10 @@ onMounted(load)
           </template>
         </el-table-column>
         <el-table-column label="命中规则" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">规则：{{ row.rule_name }}</template>
+          <template #default="{ row }">
+            <div>规则：{{ row.rule_name }}</div>
+            <div class="preview-condition">条件：{{ row.match_conditions.map(conditionText).join(' 且 ') }}</div>
+          </template>
         </el-table-column>
       </el-table>
       <el-empty v-else v-loading="previewLoading" description="没有可归属的未分配主机" :image-size="80" />
@@ -509,5 +514,6 @@ onMounted(load)
 .pagination { display: flex; justify-content: flex-end; margin-top: 14px; }
 .preview-summary { color: #3b4451; margin-bottom: 8px; }
 .preview-result { margin-bottom: 12px; padding: 8px 12px; border-radius: 6px; background: #eaf6f4; color: #1a7f74; }
+.preview-condition { overflow: hidden; color: #8a94a6; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .preview-pagination { margin-top: 10px; }
 </style>

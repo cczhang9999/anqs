@@ -20,7 +20,7 @@ import (
 // occurrences collected after this aggregate's one-time migration.
 func MigrateConfirmations() error {
 	var ids []uint
-	if err := db.GetOrm().Model(&model.SecurityAlert{}).Where("confirmation_migrated = ?", false).Pluck("id", &ids).Error; err != nil {
+	if err := db.GetOrm().Model(&model.SecurityAlert{}).Pluck("id", &ids).Error; err != nil {
 		return err
 	}
 	for _, id := range ids {
@@ -29,7 +29,13 @@ func MigrateConfirmations() error {
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&row, id).Error; err != nil {
 				return err
 			}
-			return migrateConfirmation(tx, &row)
+			if err := migrateConfirmation(tx, &row); err != nil {
+				return err
+			}
+			// Older releases could leave the aggregate row marked confirmed while
+			// its occurrence rows remained pending. Once migration is complete, the
+			// occurrence rows are the source of truth; always rebuild the summary.
+			return refreshConfirmation(tx, row.ID)
 		}); err != nil {
 			return err
 		}
@@ -136,6 +142,11 @@ func refreshConfirmation(tx *gorm.DB, id uint) error {
  COUNT(DISTINCT NULLIF(confirm_batch_id,'')) AS batches`).Scan(&summary).Error; err != nil {
 		return err
 	}
+	// A missing occurrence set can happen on partially upgraded databases.
+	// Leave the aggregate intact until the migration path can reconstruct it.
+	if summary.Total == 0 {
+		return nil
+	}
 	updates := map[string]any{"confirmation_count": summary.Batches, "confirmed_count": summary.Confirmed, "pending_count": summary.Pending, "occurrence_count": summary.Total}
 	if summary.Pending == 0 && summary.Total > 0 {
 		updates["status"] = "confirmed"
@@ -153,6 +164,21 @@ func refreshConfirmation(tx *gorm.DB, id uint) error {
 		updates["confirm_note"] = latest.ConfirmNote
 	}
 	return tx.Model(&model.SecurityAlert{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// ReconcileConfirmation refreshes the aggregate status and counts from its
+// occurrence rows before returning the history view.
+func ReconcileConfirmation(id uint) error {
+	return db.GetOrm().Transaction(func(tx *gorm.DB) error {
+		var alert model.SecurityAlert
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&alert, id).Error; err != nil {
+			return err
+		}
+		if err := migrateConfirmation(tx, &alert); err != nil {
+			return err
+		}
+		return refreshConfirmation(tx, id)
+	})
 }
 
 // ConfirmOccurrences locks aggregates in stable order, just like collection.

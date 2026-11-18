@@ -210,6 +210,13 @@ func ListHistory(req *alertval.ListAlertHistoryReq) ([]alertval.AlertHistoryItem
 	if err := ensureAlertVisible(alert, requestUserID(req.AuthUser)); err != nil {
 		return nil, err
 	}
+	if err := alertdao.ReconcileConfirmation(req.ID); err != nil {
+		return nil, err
+	}
+	alert, err = alertdao.Get(req.ID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := alertdao.ListOccurrences(req.ID)
 	if err != nil {
 		return nil, err

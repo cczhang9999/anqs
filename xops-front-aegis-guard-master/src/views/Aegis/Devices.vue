@@ -84,7 +84,14 @@ const load = async () => {
     loading.value = false
   }
 }
-const reset = () => { Object.assign(query, { keyword: '', ip: '', department_id: '', source: '' }); page.value = 1; load() }
+// A new filter creates a different result set, so selections from the old
+// result set must not remain eligible for a bulk assignment.
+const applyFilters = () => {
+  page.value = 1
+  selectedIds.value = []
+  load()
+}
+const reset = () => { Object.assign(query, { keyword: '', ip: '', department_id: '', source: '' }); applyFilters() }
 // 归属来源：规则 / 手动 / 未分配；规则被删除后仍显示规则名并标注（已删除）。
 const sourceLabel = (row: Device) => {
   if (row.assign_source === 'rule') return row.assign_rule_deleted ? `规则：${row.assign_rule_name || ''}（已删除）` : `规则：${row.assign_rule_name || ''}`
@@ -146,11 +153,11 @@ onMounted(load)
     <el-card shadow="never" class="panel">
       <div class="panel-heading"><h2>主机分组</h2><el-button v-hasPermi="'aegis-devices-sync'" size="small" :loading="syncing" @click="sync">同步设备</el-button></div>
       <div class="filter-row">
-        <el-input v-model="query.keyword" clearable class="keyword" placeholder="🔍 主机名 / 实例名称" @keyup.enter="page = 1; load()" />
-        <el-input v-model="query.ip" clearable class="ip-keyword" placeholder="🔍 IP" @keyup.enter="page = 1; load()" />
-        <el-select v-model="query.department_id" clearable filterable placeholder="全部部门" @change="page = 1; load()"><el-option label="未分组" value="0" /><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="String(item.id)" /></el-select>
-        <el-select v-model="query.source" clearable placeholder="全部来源" @change="page = 1; load()"><el-option label="规则" value="rule" /><el-option label="手动" value="manual" /><el-option label="未分配" value="unassigned" /></el-select>
-        <el-button type="primary" @click="page = 1; load()">搜索</el-button><el-button @click="reset">重置</el-button>
+        <el-input v-model="query.keyword" clearable class="keyword" placeholder="🔍 主机名 / 实例名称" @keyup.enter="applyFilters" />
+        <el-input v-model="query.ip" clearable class="ip-keyword" placeholder="🔍 IP" @keyup.enter="applyFilters" />
+        <el-select v-model="query.department_id" clearable filterable placeholder="全部部门" @change="applyFilters"><el-option label="未分组" value="0" /><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="String(item.id)" /></el-select>
+        <el-select v-model="query.source" clearable placeholder="全部来源" @change="applyFilters"><el-option label="规则" value="rule" /><el-option label="手动" value="manual" /><el-option label="未分配" value="unassigned" /></el-select>
+        <el-button type="primary" @click="applyFilters">搜索</el-button><el-button @click="reset">重置</el-button>
         <span class="hint">勾选多台可<b>批量分配到部门</b>；选「未分配」可把主机交还给规则</span>
       </div>
       <div v-if="selectedIds.length" class="bulk-row"><span>已选 <b>{{ selectedIds.length }}</b> 台　批量分配到部门：</span><el-select v-model="bulkDepartmentId" size="small" placeholder="请选择部门" style="width: 180px"><el-option label="未分组" value="0" /><el-option v-for="item in departments" :key="item.id" :label="item.name" :value="String(item.id)" /></el-select><el-button v-hasPermi="'aegis-devices-assign'" size="small" type="primary" @click="bulkAssign">分配</el-button><el-button link size="small" @click="selectedIds = []">取消选择</el-button></div>

@@ -24,17 +24,27 @@ func Upsert(device *model.Device) error {
 	if err != nil {
 		return err
 	}
-	return orm.Model(&existing).Updates(map[string]interface{}{
-		"instance_id": device.InstanceID, "instance_name": device.InstanceName,
-		"private_ip": device.PrivateIP, "os_name": device.OSName,
-	}).Error
+	updates := map[string]interface{}{
+		"instance_id": device.InstanceID,
+		"private_ip":  device.PrivateIP,
+		"os_name":     device.OSName,
+	}
+	// Security Center can intermittently omit InstanceName from an asset
+	// snapshot. Do not erase a name already learned from an earlier sync.
+	if strings.TrimSpace(device.InstanceName) != "" {
+		updates["instance_name"] = device.InstanceName
+	}
+	return orm.Model(&existing).Updates(updates).Error
 }
 
 func List(limit, offset int, keyword, ip string, departmentID *uint, source string) ([]model.Device, int64, error) {
 	query := db.GetOrm().Model(&model.Device{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		query = query.Where("instance_name LIKE ? OR instance_id LIKE ? OR private_ip LIKE ? OR aliyun_uuid LIKE ?", like, like, like, like)
+		// The UI's keyword field is for host / instance names. Keep IPs in the
+		// dedicated IP filter and avoid matching internal IDs or cloud UUIDs,
+		// which can otherwise return hosts whose displayed name is unrelated.
+		query = query.Where("instance_name LIKE ?", like)
 	}
 	if ip != "" {
 		like := "%" + ip + "%"

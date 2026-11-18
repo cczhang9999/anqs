@@ -197,6 +197,10 @@ func Preview(req *val.PreviewRuleReq) (*val.PreviewResp, error) {
 	items := make([]val.PreviewItem, 0, limit)
 	for index := offset; index < len(plan) && len(items) < limit; index++ {
 		item := plan[index]
+		conditions, err := decodeConditions(item.rule)
+		if err != nil {
+			return nil, fmt.Errorf("解析规则 %s 的匹配条件失败: %w", item.rule.Name, err)
+		}
 		items = append(items, val.PreviewItem{
 			DeviceID:            item.device.ID,
 			InstanceName:        item.device.InstanceName,
@@ -206,6 +210,7 @@ func Preview(req *val.PreviewRuleReq) (*val.PreviewResp, error) {
 			DepartmentName:      names[item.rule.DepartmentID],
 			RuleID:              item.rule.ID,
 			RuleName:            item.rule.Name,
+			MatchConditions:     conditions,
 		})
 	}
 	return &val.PreviewResp{

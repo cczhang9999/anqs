@@ -1,0 +1,17 @@
+# Local caches and OS/editor files
+.DS_Store
+.cache/
+**/.idea/
+**/.vscode/
+
+# Local credentials and environment-specific configuration
+xops-aegis-guard-master/config/config.yml
+xops-front-aegis-guard-master/.env.*
+!xops-front-aegis-guard-master/.env.example
+docker-compose.yml
+
+# Build outputs and dependencies
+**/node_modules/
+**/dist/
+**/coverage/
+**/logs/

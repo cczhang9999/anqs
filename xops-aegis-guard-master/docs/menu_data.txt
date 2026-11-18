@@ -1,0 +1,4 @@
+安骑士告警分组系统 aegis-guard-index
+告警确认 aegis-alerts
+主机分组映射 aegis-devices
+部门告警群配置 aegis-departments

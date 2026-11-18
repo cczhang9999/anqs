@@ -1,0 +1,61 @@
+enabled: true
+rules:
+  - name: password
+    fields: ["password", "passwd", "pwd", "pass", "old_password", "new_password", "confirm_password", "credential", "credentials", "secret", "client_secret", "app_secret"]
+    type: fixed
+    replace: "******"
+  - name: phone
+    fields: ["phone", "mobile", "tel"]
+    type: mask
+    keep_left: 3
+    keep_right: 4
+    replace: "*"
+  - name: email
+    fields: ["email", "mail"]
+    type: mask
+    keep_left: 2
+    keep_right: 8
+    replace: "*"
+  - name: token
+    fields: ["token", "access_token", "refresh_token", "id_token", "auth_token", "csrf_token", "xsrf_token", "api_token", "api_key", "apikey", "secret_key", "private_token", "personal_access_token", "deploy_token", "job_token", "registration_token", "runner_token", "authorization", "auth", "bearer", "basic", "x_api_key", "x_auth_token", "x_atlassian_token", "jenkins_crumb", "crumb", "gitlab_token", "jira_token", "nexus_token", "jfrog_token", "bytebase_token", "confluent_token", "elastic_api_key", "kbn_xsrf"]
+    type: fixed
+    replace: "******"
+  - name: session
+    fields: ["session", "session_id", "sessionid", "sid", "jsessionid", "remember_me", "cookie", "cookies", "set_cookie"]
+    type: fixed
+    replace: "******"
+  - name: id_card
+    fields: ["id_card", "idcard", "identity_no", "cert_no"]
+    type: mask
+    keep_left: 4
+    keep_right: 4
+    replace: "*"
+
+# 告警文本的密码规则始终启用；enabled 仅控制上面的通用字段脱敏。
+# 未提供 text_rules 时使用内置初始清单；配置此项时整个清单替换默认值。
+# 命令名按可执行文件 basename 匹配，省略 commands 表示所有命令。
+# key_value 参数支持前缀通配 *，忽略大小写；长参数忽略大小写，短参数区分大小写。
+text_rules:
+  - type: key_value
+    parameters: ["password", "passwd", "pwd", "secret", "secret_key", "token", "access_key", "*.password", "*_password", "*_secret", "*_token"]
+  - type: credential
+    commands: ["ncat"]
+    parameters: ["--proxy-auth"]
+  - type: credential
+    commands: ["curl"]
+    parameters: ["-u", "--user", "-U", "--proxy-user"]
+  - type: argument
+    parameters: ["--password", "--passwd"]
+  - type: argument
+    commands: ["sshpass"]
+    parameters: ["-p"]
+  - type: argument
+    commands: ["redis-cli"]
+    parameters: ["-a"]
+  - type: attached
+    commands: ["mysql", "mysqldump", "mysqladmin"]
+    parameters: ["-p"]
+  - type: url
+# 新写法可使用 regex，必须以 (?P<password>...) 标注需要屏蔽的部分：
+# - type: regex
+#   pattern: 'custom-auth\[(?P<password>[^\]]+)\]'

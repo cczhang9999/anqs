@@ -1,0 +1,48 @@
+server:
+  http_port: ":30044"
+  debug: false
+
+logger:
+  path: "./logs"
+  level: "info"
+  max_age: 7
+  rotation_time: 24
+  debug: false
+  writefile: true
+
+legal_tender_db:
+  debug: false
+  # Replace CHANGE_ME with a URL-encoded password if it contains special characters.
+  connection: "root:CHANGE_ME@tcp(127.0.0.1:3306)/xops_aegis_guard?charset=utf8mb4&parseTime=True&loc=Local"
+  connmaxlifetime: 0
+  maxopenconns: 100
+  maxidleconns: 10
+  colorful: false
+
+redis:
+  mode: singleton
+  addrs:
+    - "127.0.0.1:6379"
+  password: ""
+  db: 9
+  pool:
+    poolsize: 10
+    minidleconns: 5
+
+aliyun:
+  - name: aqs-enterprise
+    type: AQS
+    access_key: ""
+    access_key_secret: ""
+    endpoint: "tds.ap-southeast-1.aliyuncs.com"
+    cloud_siem_endpoint: "cloud-siem.ap-southeast-1.aliyuncs.com"
+    region_id: "ap-southeast-1"
+
+robot:
+  enabled: false
+  url: "http://127.0.0.1:30038"
+  source_name: "ANQS"
+  timeout_seconds: 10
+
+desensitize:
+  enabled: true

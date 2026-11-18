@@ -1,0 +1,99 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/version: "__VERSION__"
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubernetes.io/change-cause: kubectl apply --filename=./deployment.yaml --record=true
+  labels:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/version: "__VERSION__"
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+      app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/proxyImage: harbor.zfit888.com/istio/proxyv2:1.23.6
+        traffic.sidecar.istio.io/excludeOutboundPorts: "9092"
+      labels:
+        sidecar.istio.io/inject: "true"
+        app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+        app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+        app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+        app.kubernetes.io/version: "__VERSION__"
+    spec:
+      serviceAccountName: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+      imagePullSecrets:
+        - name: harbor-push
+      containers:
+        - name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+          image: harbor.zfit888.com/__HARBOR_PROJECT__/__CI_SERVICE_NAME__:__VERSION__
+          imagePullPolicy: IfNotPresent
+          command:
+            - "./run"
+            - "-f"
+            - "config/config.yml"
+          ports:
+            - containerPort: 8000
+              name: http
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config/config.yml
+              subPath: config.yml
+      volumes:
+        - name: config-volume
+          configMap:
+            name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+            items:
+              - key: config.yml
+                path: config.yml
+                mode: 0755
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubernetes.io/change-cause: kubectl apply --filename=./deployment.yaml --record=true
+  labels:
+    app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/version: "__VERSION__"
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  ports:
+    - name: http-80
+      port: 80
+      protocol: TCP
+      targetPort: 8000
+  selector:
+    app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  sessionAffinity: None
+  type: ClusterIP

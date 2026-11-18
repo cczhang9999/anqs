@@ -1,0 +1,34 @@
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  labels:
+    app: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    app.kubernetes.io/version: "__VERSION__"
+    k8s.kuboard.cn/layer: __LAYER_NAME__
+  name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  action: ALLOW
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+      app.kubernetes.io/name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/xops/sa/xops-front-__CI_ENVIRONMENT_NAME__
+
+---
+apiVersion: telemetry.istio.io/v1
+kind: Telemetry
+metadata:
+  name: enable-access-log-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  accessLogging:
+    - providers:
+        - name: envoy

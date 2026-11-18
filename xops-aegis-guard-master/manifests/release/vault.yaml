@@ -1,0 +1,22 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name:  __CI_SERVICE_NAME__-reviewer-token-__CI_ENVIRONMENT_NAME__
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+    namespace: __NAMESPACE__
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: __CI_SERVICE_NAME__-reviewer-token-__CI_ENVIRONMENT_NAME__
+  namespace: __NAMESPACE__
+  annotations:
+    kubernetes.io/service-account.name: __CI_SERVICE_NAME__-__CI_ENVIRONMENT_NAME__
+type: kubernetes.io/service-account-token

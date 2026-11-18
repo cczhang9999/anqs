@@ -208,7 +208,7 @@ const save = async () => {
     }
     if (form.id) await updateGroupRule(form.id, payload)
     else await createGroupRule(payload)
-    ElMessage.success('规则已保存，下一次每日执行时生效；需要马上生效请点「立即执行」')
+    ElMessage.success('规则已保存；需要马上生效请点「立即执行」')
     dialogVisible.value = false
     await load()
   } finally {

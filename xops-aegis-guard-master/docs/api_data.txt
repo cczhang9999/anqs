@@ -6,6 +6,7 @@
 安骑士告警分组系统-告警确认-统计 /api/aegis/v1/alertstats GET
 安骑士告警分组系统-告警确认-列表 /api/aegis/v1/alertlist GET
 安骑士告警分组系统-告警确认-确认 /api/aegis/v1/alert-confirm POST
+安骑士告警分组系统-告警确认-批量确认 /api/aegis/v1/alerts-confirm POST
 安骑士告警分组系统-告警确认-立即采集 /api/aegis/v1/alert-collect POST
 安骑士告警分组系统-主机分组映射-增加 /api/aegis/v1/device POST
 安骑士告警分组系统-主机分组映射-删除 /api/aegis/v1/device DELETE

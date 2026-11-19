@@ -58,6 +58,30 @@ const operatorLabel = (value: string) => OPERATORS.find((item) => item.value ===
 const isRegex = (value: string) => value === 'regex'
 const isIpOperator = (value: string) => IP_OPERATORS.some((item) => item.value === value)
 
+const ipVersion = (value: string): 4 | 6 | 0 => {
+  const parts = value.split('.')
+  if (parts.length === 4 && parts.every((part) => /^(0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255)) return 4
+  if (!value || value.includes('%')) return 0
+  try {
+    const hostname = new URL(`http://[${value}]/`).hostname
+    return hostname.startsWith('[') && hostname.endsWith(']') ? 6 : 0
+  } catch {
+    return 0
+  }
+}
+
+const validateIpValue = (value: string) => {
+  const parts = value.split('/')
+  if (parts.length > 2) return 'IP/CIDR 格式错误'
+  const version = ipVersion(parts[0])
+  if (!version) return 'IP/CIDR 格式错误'
+  if (parts.length === 1) return ''
+  if (!/^\d+$/.test(parts[1])) return 'CIDR 前缀长度格式错误'
+  const prefix = Number(parts[1])
+  const maxPrefix = version === 4 ? 32 : 128
+  return prefix <= maxPrefix ? '' : `IPv${version} 的 CIDR 前缀长度必须为 0–${maxPrefix}`
+}
+
 // 目标部门标签取一组固定色板，颜色按部门 ID 稳定分配。
 const DEPARTMENT_COLORS = ['#f0a020', '#8b5cf6', '#20b2a6', '#e6412e', '#ec4899', '#12b76a', '#3b82f6', '#a16207', '#0ea5e9', '#9333ea']
 const departmentColor = (id: number) => DEPARTMENT_COLORS[Math.abs(Number(id) || 0) % DEPARTMENT_COLORS.length]
@@ -193,7 +217,14 @@ const validateForm = () => {
       return
     }
     const values = value.split(/[,，]/).map((item) => item.trim()).filter(Boolean)
-    if (!values.length) errors.rows[index] = '请填写匹配值，多个值用逗号隔开'
+    if (!values.length) {
+      errors.rows[index] = '请填写匹配值，多个值用逗号隔开'
+      return
+    }
+    if (isIpOperator(condition.operator)) {
+      const invalid = values.map(validateIpValue).find(Boolean)
+      if (invalid) errors.rows[index] = invalid
+    }
   })
   return !errors.name && !errors.dept && !errors.general && Object.keys(errors.rows).length === 0
 }
@@ -404,7 +435,7 @@ onMounted(load)
                   v-model="condition.value"
                   class="condition-value"
                   :class="{ 'is-error': errors.rows[index] }"
-                  :placeholder="isRegex(condition.operator) ? '填写一个正则表达式（不按逗号拆分），如 (^|-)ai(-|$)' : isIpOperator(condition.operator) ? '多个 IP 或网段用逗号隔开，如 10.0.0.1, 10.0.0.0/24' : '多个值用中英文逗号隔开，如 -dc-，-tbj-'"
+                  :placeholder="isRegex(condition.operator) ? '填写一个正则表达式（不按逗号拆分），如 (^|-)ai(-|$)' : isIpOperator(condition.operator) ? '多个 IP 或网段用逗号隔开，如 10.0.0.1, 10.0.0.0/24（IPv4 前缀 0–32，IPv6 前缀 0–128）' : '多个值用中英文逗号隔开，如 -dc-，-tbj-'"
                   @input="errors.rows[index] = ''"
                 />
                 <el-button link type="danger" :disabled="form.conditions.length <= 1" title="删除该条件" @click="removeCondition(index)">✕</el-button>

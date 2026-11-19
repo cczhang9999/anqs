@@ -1506,8 +1506,7 @@ func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any, 
 	return b.String()
 }
 
-// rootLoginAlertKind recognizes only the root login success/failure rules so
-// every other suspicious event keeps the existing notification format.
+// rootLoginAlertKind 仅识别 root 登录成功/失败规则，确保其他可疑事件继续使用现有通知格式。
 func rootLoginAlertKind(title string) bool {
 	title = strings.ToLower(strings.TrimSpace(title))
 	return strings.Contains(title, "r176") || strings.Contains(title, "r177") ||

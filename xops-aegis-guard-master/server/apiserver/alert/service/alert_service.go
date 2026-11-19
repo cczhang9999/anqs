@@ -430,7 +430,7 @@ func (s *Service) refreshSparseMessages() error {
 				OccurrenceTime: findValue(payload, "OccurrenceTime", "FirstTime"),
 				LastTime:       findValue(payload, "LastTime", "LatestTime"),
 			}
-			message = buildSuspiciousAlertMessage(item, alertPayloadMap(payload))
+			message = buildSuspiciousAlertMessage(item, alertPayloadMap(payload), device)
 		case "honeypot":
 			payload = expandMergeFieldList(payload)
 			if device == nil {
@@ -630,7 +630,7 @@ func (s *Service) collectSuspEvents() error {
 		if device != nil {
 			deviceID = device.ID
 		}
-		message := s.maskMessage(buildSuspiciousAlertMessage(item, alertPayloadMap(payload)))
+		message := s.maskMessage(buildSuspiciousAlertMessage(item, alertPayloadMap(payload), device))
 		now := time.Now()
 		row := &alertmodel.SecurityAlert{Source: "aliyun", ProductType: item.AccountType, AlertType: "suspicious_event", ProviderAlertID: providerID, Fingerprint: fingerprint, Title: item.Title, Severity: normalizeSuspiciousSeverity(item.Level), Status: "firing", DeviceID: deviceID, FirstProviderTime: firstProviderTime, LastSeenAt: now, LastProviderTime: lastProviderTime, OccurrenceCount: 1, LastPayload: marshal(payload), LastMessage: message, ContentHash: alerttools.ContentHash(message)}
 		result, err := alertdao.Upsert(row, alerttools.EventKey(row.AlertType, row.Fingerprint, row.ProviderAlertID, row.LastProviderTime, rawPayload))
@@ -868,9 +868,19 @@ func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, message string) {
 		return
 	}
 	message = appendDutyMention(message, dutyUser)
-	if err := s.notifier.Notify(context.Background(), robotID, message); err != nil {
+	var err error
+	if requiresSplitNotification(row) {
+		err = s.notifier.NotifySplit(context.Background(), robotID, message)
+	} else {
+		err = s.notifier.Notify(context.Background(), robotID, message)
+	}
+	if err != nil {
 		logger.Warnf("send alert notification failed: alert_id=%d department_id=%d error=%v", row.ID, departmentID, err)
 	}
+}
+
+func requiresSplitNotification(row *alertmodel.SecurityAlert) bool {
+	return row != nil && row.AlertType == "suspicious_event" && rootLoginAlertKind(row.Title)
 }
 
 // notificationDevice resolves Cloud SIEM assets again immediately before a
@@ -1453,7 +1463,14 @@ func alertPayloadMap(value any) map[string]any {
 
 // buildSuspiciousAlertMessage 生成安骑士主机安全告警通知。
 // 该格式与历史 warning 项目的通知格式保持一致，字段值来自已经脱敏的 payload。
-func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any) string {
+func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any, devices ...*devicemodel.Device) string {
+	if rootLoginAlertKind(item.Title) {
+		var device *devicemodel.Device
+		if len(devices) > 0 {
+			device = devices[0]
+		}
+		return buildRootLoginAlertMessage(item, payload, device)
+	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("**❌❌❌❌%s❌❌❌❌**", item.AccountType))
 	writeMarkdownField(&b, "☁ 告警来源", accountEditionText(item.AccountType))
@@ -1490,6 +1507,135 @@ func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any) 
 	}
 	writeMarkdownField(&b, "处置建议", detailValue(payload, "处置建议", "处理建议", "建议"))
 	return b.String()
+}
+
+// rootLoginAlertKind recognizes only the root login success/failure rules so
+// every other suspicious event keeps the existing notification format.
+func rootLoginAlertKind(title string) bool {
+	title = strings.ToLower(strings.TrimSpace(title))
+	return strings.Contains(title, "r176") || strings.Contains(title, "r177") ||
+		(strings.Contains(title, "root") &&
+			(strings.Contains(title, "成功") || strings.Contains(title, "success") ||
+				strings.Contains(title, "失败") || strings.Contains(title, "failed") || strings.Contains(title, "failure")))
+}
+
+func buildRootLoginAlertMessage(item aliyun.SuspEvent, payload map[string]any, device *devicemodel.Device) string {
+	alertTime := rootLoginTime(firstNonEmptyMessage(item.OccurrenceTime, directValue(payload, "OccurrenceTime", "FirstTime")))
+	logTime := rootLoginTime(firstNonEmptyMessage(
+		directValue(payload, "LogTimeStamp", "LogTimestamp", "日志时间戳"),
+		detailValue(payload, "日志时间戳"),
+	))
+	eventID := firstNonEmptyMessage(
+		directValue(payload, "SecurityEventIds", "SecurityEventID", "SecurityEventId"),
+		detailValue(payload, "安全事件ID", "事件ID"),
+	)
+	assetName := firstNonEmptyMessage(item.InstanceName, directValue(payload, "InstanceName", "HostName", "Hostname"))
+	privateIP := firstNonEmptyMessage(item.PrivateIP, directValue(payload, "IntranetIp", "PrivateIP", "private_ip"))
+	if device != nil {
+		assetName = firstNonEmptyMessage(assetName, device.InstanceName)
+		privateIP = firstNonEmptyMessage(privateIP, device.PrivateIP)
+	}
+	loginType := rootLoginField(payload, "login_type", "LoginType", "登录方式", "登录协议")
+	username := rootLoginField(payload, "username", "UserName", "登录账号", "用户名")
+	dstIP := rootLoginField(payload, "dst_ip", "DstIp", "DstIP", "目标IP")
+	dstPort := rootLoginField(payload, "dst_port", "DstPort", "目标端口")
+	srcIP := rootLoginField(payload, "src_ip", "SrcIp", "SrcIP", "登录源IP", "登录来源IP", "来源IP")
+	if srcIP == "" {
+		srcIP = rootLoginLocationSourceIP(payload)
+	}
+	connectDir := rootLoginField(payload, "net_connect_dir", "NetConnectDir", "连接方向")
+	severity := coreSeverityText(normalizeSuspiciousSeverity(item.Level))
+
+	var b strings.Builder
+	writeRootLoginField(&b, "告警时间", alertTime)
+	writeRootLoginField(&b, "日志时间", logTime)
+	writeRootLoginField(&b, "告警名", item.Title)
+	writeRootLoginField(&b, "事件 ID", eventID)
+	writeRootLoginField(&b, "等级标签", severity)
+	b.WriteString("\n\n【受影响资产】\n")
+	writeRootLoginField(&b, "资产名称", assetName)
+	writeRootLoginField(&b, "私网 IP", privateIP)
+	b.WriteString("\n【登录详情】\n")
+	writeRootLoginField(&b, "username", username)
+	writeRootLoginField(&b, "login_type", loginType)
+	writeRootLoginField(&b, "dst_ip", dstIP)
+	writeRootLoginField(&b, "dst_port", dstPort)
+	writeRootLoginField(&b, "src_ip", srcIP)
+	writeRootLoginField(&b, "net_connect_dir", connectDir)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func rootLoginField(payload map[string]any, keys ...string) string {
+	if value := directValue(payload, keys...); value != "" {
+		return value
+	}
+	return detailValue(payload, keys...)
+}
+
+// Some root-login payloads expose the source address as a location detail.
+// Accept it only when the value is an IP address, so a city or country label
+// cannot be mistaken for src_ip.
+func rootLoginLocationSourceIP(payload map[string]any) string {
+	for _, detail := range mapSlice(payload["Details"]) {
+		name := firstNonEmptyMessage(messageValue(detail["NameDisplay"]), messageValue(detail["Name"]))
+		if !strings.EqualFold(strings.TrimSpace(name), "location") {
+			continue
+		}
+		value := firstNonEmptyMessage(messageValue(detail["Value"]), messageValue(detail["ValueDisplay"]))
+		if net.ParseIP(strings.TrimSpace(value)) != nil {
+			return value
+		}
+	}
+	return ""
+}
+
+// directValue intentionally reads only top-level fields; recursive lookup can
+// confuse alert metadata with an associated login entity's values.
+func directValue(payload map[string]any, keys ...string) string {
+	for _, candidate := range keys {
+		for key, value := range payload {
+			if strings.EqualFold(key, candidate) {
+				if text := messageValue(value); !isMissingMessageValue(text) {
+					return text
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func writeRootLoginField(b *strings.Builder, label, value string) {
+	if b.Len() > 0 && !strings.HasSuffix(b.String(), "\n") {
+		b.WriteByte('\n')
+	}
+	value = strings.Join(strings.Fields(strings.ReplaceAll(messageValue(value), "@", "＠")), " ")
+	if isMissingMessageValue(value) {
+		value = "未提供"
+	}
+	b.WriteString(label)
+	b.WriteRune('：')
+	b.WriteString(value)
+}
+
+// rootLoginTime formats timestamps only when the source includes an explicit
+// timezone. Without one, the source text is retained as required by the PRD.
+func rootLoginTime(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	for _, layout := range []string{
+		time.RFC3339Nano,
+		"2006-01-02T15:04:05.999999999Z07:00",
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02 15:04:05.999999999Z07:00",
+		"2006-01-02 15:04:05Z07:00",
+	} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.Format(time.DateTime)
+		}
+	}
+	return value
 }
 
 // writeSuspiciousImportantDetails keeps the host-security fields needed for

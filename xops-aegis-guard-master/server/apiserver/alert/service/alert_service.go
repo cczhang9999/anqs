@@ -875,19 +875,9 @@ func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, message string) {
 		return
 	}
 	message = appendDutyMention(message, dutyUser)
-	var err error
-	if requiresSplitNotification(row) {
-		err = s.notifier.NotifySplit(context.Background(), robotID, message)
-	} else {
-		err = s.notifier.Notify(context.Background(), robotID, message)
-	}
-	if err != nil {
+	if err := s.notifier.Notify(context.Background(), robotID, message); err != nil {
 		logger.Warnf("send alert notification failed: alert_id=%d department_id=%d error=%v", row.ID, departmentID, err)
 	}
-}
-
-func requiresSplitNotification(row *alertmodel.SecurityAlert) bool {
-	return row != nil && row.AlertType == "suspicious_event" && rootLoginAlertKind(row.Title)
 }
 
 // notificationDevice resolves Cloud SIEM assets again immediately before a

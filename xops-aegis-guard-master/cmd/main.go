@@ -54,7 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 	validator.InitValidate()
-	alertservice.Init(clients, masker, robotapi.NewNotifier(conf.Robot))
+	alertservice.Init(clients, masker, robotapi.NewNotifier(conf.Robot, conf.Telegram))
 	scheduler := task.StartJob()
 	defer scheduler.Stop()
 

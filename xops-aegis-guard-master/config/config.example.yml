@@ -44,5 +44,13 @@ robot:
   source_name: "ANQS"
   timeout_seconds: 10
 
+# Optional direct delivery of collected alerts and confirmations to one Telegram group.
+# When disabled, notifications use the department's robot-new group.
+# Credentials can be supplied via ANQS_TELEGRAM_BOT_TOKEN and ANQS_TELEGRAM_CHAT_ID.
+telegram:
+  enabled: false
+  bot_token: ""
+  chat_id: ""
+
 desensitize:
   enabled: true

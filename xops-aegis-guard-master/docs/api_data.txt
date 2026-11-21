@@ -7,6 +7,7 @@
 安骑士告警分组系统-告警确认-列表 /api/aegis/v1/alertlist GET
 安骑士告警分组系统-告警确认-确认 /api/aegis/v1/alert-confirm POST
 安骑士告警分组系统-告警确认-批量确认 /api/aegis/v1/alerts-confirm POST
+安骑士告警分组系统-告警确认-批量确认（UAT） /api/aegisguard/v1/alerts-confirm POST
 安骑士告警分组系统-告警确认-立即采集 /api/aegis/v1/alert-collect POST
 安骑士告警分组系统-主机分组映射-增加 /api/aegis/v1/device POST
 安骑士告警分组系统-主机分组映射-删除 /api/aegis/v1/device DELETE
@@ -26,3 +27,9 @@
 安骑士告警分组系统-部门告警群配置-列表 /api/aegis/v1/departmentlist GET
 安骑士告警分组系统-部门告警群配置-未分组设置 /api/aegis/v1/department-fallback GET
 安骑士告警分组系统-部门告警群配置-保存未分组设置 /api/aegis/v1/department-fallback PUT
+
+
+telegram:
+  enabled: true
+  bot_token: ""
+  chat_id: ""

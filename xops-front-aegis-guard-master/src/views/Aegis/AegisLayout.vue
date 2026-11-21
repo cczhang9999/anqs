@@ -24,7 +24,7 @@ watch(currentMenu, (menu) => { document.title = `安骑士告警分组系统 - $
 </script>
 
 <template>
-  <div class="aegis-shell">
+  <div class="aegis-shell" :class="{ 'is-alert-page': currentMenu.path === '/aegis/alerts' }">
     <aside class="aegis-sidebar">
       <router-link to="/aegis/alerts" class="aegis-logo">
         <img src="/aegis-shield-alert.svg" alt="安骑士告警分组系统" />
@@ -37,6 +37,8 @@ watch(currentMenu, (menu) => { document.title = `安骑士告警分组系统 - $
           v-for="item in alertMenus"
           :key="item.path"
           :to="item.path"
+          :aria-label="item.title"
+          :title="item.title"
           class="aegis-menu-item"
           :class="{ active: route.path === item.path }"
         >
@@ -51,6 +53,8 @@ watch(currentMenu, (menu) => { document.title = `安骑士告警分组系统 - $
           v-for="item in configMenus"
           :key="item.path"
           :to="item.path"
+          :aria-label="item.title"
+          :title="item.title"
           class="aegis-menu-item"
           :class="{ active: route.path === item.path }"
         >
@@ -135,5 +139,13 @@ watch(currentMenu, (menu) => { document.title = `安骑士告警分组系统 - $
   .aegis-sidebar { width: 190px; flex-basis: 190px; }
   .aegis-logo { padding: 0 12px; font-size: 13px; }
   .aegis-topbar { padding: 0 14px; }
+}
+@media (max-width: 600px) {
+  .is-alert-page .aegis-sidebar { width: 52px; flex-basis: 52px; }
+  .is-alert-page .aegis-logo { justify-content: center; padding: 0; }
+  .is-alert-page .aegis-menu-group { padding-inline: 5px; }
+  .is-alert-page .aegis-menu-item { justify-content: center; padding: 0; }
+  .is-alert-page .aegis-menu-label { padding-inline: 0; text-align: center; }
+  .is-alert-page .aegis-logo span, .is-alert-page .aegis-menu-item > span:last-child { display: none; }
 }
 </style>

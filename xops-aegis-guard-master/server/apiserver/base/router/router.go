@@ -26,7 +26,7 @@ func InitRouter(conf *config.Config) error {
 	v1 := r.Group("/v1")
 	v1.Use(logRequest, middleware.AuthUser)
 	registerRouter(v1)
-	return r.Run(":" + conf.Server.HTTPPort)
+	return r.Run(conf.Server.HTTPPort)
 }
 
 func registerRouter(r *gin.RouterGroup) {

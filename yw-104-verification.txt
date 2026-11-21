@@ -1,0 +1,38 @@
+YW-104 验证记录
+================
+
+分支：yw-104
+验证时间：2026-11-18（Asia/Manila）
+
+修改范围
+--------
+1. robot_api.go 新增 NotifySplit，支持保留全文、按 UTF-16 字数限制分段发送。
+2. 原 Notify 继续保持单条消息和原截断行为。
+3. 只有 suspicious_event 且告警名识别为 root 登录成功/失败时，才调用 NotifySplit。
+4. root 登录正文包含固定字段、缺失值占位、明确时区格式化和源 IP 不回填目标 IP。
+
+非测试验证
+----------
+命令：gofmt -l server/api/robot_api.go server/apiserver/alert/service/alert_service.go
+结果：退出码 0；无输出，文件格式符合 gofmt。
+
+命令：GOCACHE=/private/tmp/anqs-go-build-cache go build ./...
+结果：退出码 0；编译通过，无输出。
+
+命令：GOCACHE=/private/tmp/anqs-go-build-cache go vet ./...
+结果：退出码 0；静态检查通过，无输出。
+
+命令：git diff --check
+结果：退出码 0；无空白和补丁格式问题。
+
+测试与外部验证
+--------------
+按用户要求，本轮不执行测试；本次新增的测试文件已移除。
+未连接或调用真实机器人接口，因此没有验证实际群内呈现或上游投递状态。
+
+工作区状态
+----------
+当前分支：yw-104
+修改文件：
+- xops-aegis-guard-master/server/api/robot_api.go
+- xops-aegis-guard-master/server/apiserver/alert/service/alert_service.go

@@ -220,10 +220,16 @@ func ConfirmOccurrences(ids []uint, occurrenceID uint, note string, byID int, by
 			if err := query.Count(&count).Error; err != nil {
 				return err
 			}
-			if count == 0 {
-				continue
+		if count == 0 {
+			// 该聚合下已无待确认明细；仍刷新一次汇总，修复旧版本或并发
+			// 可能留下的状态不一致（例如 occurrence 已确认但 aggregate
+			// 仍显示 firing），避免前端反复展示“待确认”按钮。
+			if err := refreshConfirmation(tx, alert.ID); err != nil {
+				return err
 			}
-			if batch == "" {
+			continue
+		}
+		if batch == "" {
 				var bytes [32]byte
 				if _, err := rand.Read(bytes[:]); err != nil {
 					return err

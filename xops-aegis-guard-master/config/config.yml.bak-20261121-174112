@@ -1,0 +1,72 @@
+server:
+  http_port: ":30044"
+  debug: false
+
+logger:
+  # 日志存放路径，当前目录的log文件夹
+  path: "./logs"
+  # 日志打印等级，[debug, info, warn, err, off]
+  level: "debug"
+  # 最大存放时间，7天，超过7天的日志会删除
+  max_age: 7
+  # 日志分割时间，24小时，日志以1天为单位分割，一天一个文件
+  rotation_time: 24
+  # 是否打印日志
+  debug: true
+  # 是否存储日志
+  writefile: true
+
+legal_tender_db:
+  # 调试模式开关
+  debug: true
+  # mysql连接
+  # connection: root:f5Vcnk8H3NgWC045NPbS@tcp(172.30.82.50:3306)/tracing_sas_view?charset=utf8&parseTime=True&loc=Local
+  connection: "root:1qaz@WSX@tcp(127.0.0.1:3306)/xops_aegis_guard?charset=utf8mb4&parseTime=True&loc=Local"
+  # 连接池中每个连接的最大生存时间，单位秒。
+  connmaxlifetime: 0
+  # 连接池中允许同时打开的最大连接数
+  maxopenconns: 100
+  # 连接池中允许存在的最大空闲连接数
+  maxidleconns: 10
+  colorful: true
+
+redis:
+  mode: singleton
+  addrs:
+    - "127.0.0.1:6379"
+  password: ""
+  db: 9
+  pool:
+    poolsize: 10
+    minidleconns: 5
+
+aliyun:
+  - name: aqs-enterprise
+    type: AQS
+    access_key: "********"
+    access_key_secret: "********"
+    endpoint: "tds.ap-southeast-1.aliyuncs.com"
+    cloud_siem_endpoint: "cloud-siem.ap-southeast-1.aliyuncs.com"
+    region_id: "ap-southeast-1"
+  - name: aqs-ultimate
+    type: ULT
+    # 使用原项目 AES 工具加密后填写，禁止填写明文 AK/SK。
+    access_key: ""
+    access_key_secret: ""
+    endpoint: "tds.ap-southeast-1.aliyuncs.com"
+    cloud_siem_endpoint: "cloud-siem.ap-southeast-1.aliyuncs.com"
+    region_id: "ap-southeast-1"
+
+robot:
+  enabled: true
+  url: "http://127.0.0.1:30038"
+  source_name: "安骑士聚合告警"
+  timeout_seconds: 10
+
+telegram:
+  enabled: true
+  bot_token: "9226566987:AAFfMF_TPft1bEfkGAJ_1g8OZEJLWDHmXss"
+  chat_id: "-1004420035964"
+
+desensitize:
+  enabled: true

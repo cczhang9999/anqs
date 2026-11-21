@@ -19,6 +19,7 @@ type Config struct {
 	Logger      *zaplog.LoggerConfig `mapstructure:"logger"`
 	Aliyun      []Aliyun             `mapstructure:"aliyun"`
 	Robot       Robot                `mapstructure:"robot"`
+	Telegram    Telegram             `mapstructure:"telegram"`
 	Desensitize *Desensitize         `mapstructure:"desensitize"`
 }
 
@@ -69,6 +70,12 @@ type Robot struct {
 	URL            string `mapstructure:"url"`
 	SourceName     string `mapstructure:"source_name"`
 	TimeoutSeconds int    `mapstructure:"timeout_seconds"`
+}
+
+type Telegram struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	BotToken string `mapstructure:"bot_token"`
+	ChatID   string `mapstructure:"chat_id"`
 }
 
 type Desensitize struct {
@@ -160,6 +167,12 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Desensitize == nil {
 		c.Desensitize = &Desensitize{Enabled: true}
+	}
+	if c.Telegram.BotToken == "" {
+		c.Telegram.BotToken = strings.TrimSpace(os.Getenv("ANQS_TELEGRAM_BOT_TOKEN"))
+	}
+	if c.Telegram.ChatID == "" {
+		c.Telegram.ChatID = strings.TrimSpace(os.Getenv("ANQS_TELEGRAM_CHAT_ID"))
 	}
 	if err := decryptAliyunCredentials(&c); err != nil {
 		return nil, err

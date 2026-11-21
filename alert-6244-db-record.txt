@@ -1,0 +1,127 @@
+id: 6244
+created_at: 2026-11-14 16:26:03
+updated_at: 2026-11-19 16:35:09
+source: aliyun
+product_type: AQS
+alert_type: custom_incident
+provider_alert_id: 68b1aacc-3e22-4953-bec4-a699f07369ae
+title: R177 root用户登陆失败
+severity: medium
+status: firing
+device_id: 0
+first_provider_time: 2026-11-14 16:25:00
+last_seen_at: 2026-11-14 16:28:02
+last_provider_time: 2026-11-14 16:25:00
+occurrence_count: 1
+confirmation_count: 0
+confirmed_count: 0
+pending_count: 1
+confirm_note: NULL
+confirmed_by: NULL
+confirmed_at: NULL
+last_message:
+📑 告警名称：R177 root用户登陆失败
+🆔 告警编号：68b1aacc-3e22-4953-bec4-a699f07369ae
+🚨 告警等级：中危
+⏱ 告警时间：2026-11-14 16:25:00
+☁ 告警来源：企业版
+🏷 内容：
+--资产：Z-JP-GL-IDC-JumpServer01
+--ip：10.109.248.208
+--用户：root
+--描述：检测到 root 账号通过 SSH 登录目标主机失败。root 账号具备系统最高权限，针对 root 的登录失败可能由账号密码输入错误、自动化脚本配置异常或未经授权的登录尝试导致。若短时间内出现多次失败、来源 IP 异常或跨多台主机尝试，可能存在账号探测、密码爆破或入侵尝试风险，建议核实登录源 IP、登录人员、失败次数及后续是否存在成功登录行为。
+
+last_payload:
+{
+  "Advanced": false,
+  "AlarmEventName": "login_common_ip",
+  "AlarmEventNameDisplay": "ECS非常用IP登录",
+  "AlarmEventType": "异常登录",
+  "AlarmEventTypeDisplay": "异常登录",
+  "AlarmUniqueInfo": "059d8edc1584598a062d9947aa108398",
+  "AutoBreaking": false,
+  "CanBeDealOnLine": false,
+  "CanCancelFault": true,
+  "ContainHwMode": false,
+  "DataSource": "aegis_login_log",
+  "Desc": "本次登录的IP非您定义的合法IP范畴，请您确认登录行为合法性。",
+  "Details": [
+    {
+      "NameDisplay": "提示",
+      "Type": "html",
+      "Value": "本次登录的IP非您定义的合法IP范畴，请您确认登录行为合法性。",
+      "ValueDisplay": "本次登录的IP非您定义的合法IP范畴，请您确认登录行为合法性。"
+    },
+    {
+      "NameDisplay": "登录时间",
+      "Type": "text",
+      "Value": "2026-10-24 19:07:55",
+      "ValueDisplay": "2026-10-24 19:07:55"
+    },
+    {
+      "NameDisplay": "登录账号",
+      "Type": "text",
+      "Value": "pzom",
+      "ValueDisplay": "pzom"
+    },
+    {
+      "NameDisplay": "登录协议",
+      "Type": "text",
+      "Value": "SSH",
+      "ValueDisplay": "SSH"
+    },
+    {
+      "NameDisplay": "登录源IP",
+      "Type": "text",
+      "Value": "172.30.231.208",
+      "ValueDisplay": "172.30.231.208"
+    },
+    {
+      "NameDisplay": "登录地",
+      "Type": "text",
+      "Value": "局域网",
+      "ValueDisplay": "局域网"
+    },
+    {
+      "NameDisplay": "描述",
+      "Type": "text",
+      "Value": "本次登录的来源IP非您自主定义的合法IP范围，若本次登录确认为自己的正常登录，建议您增加合法IP范畴，避免再次告警给您带来困扰，若本次登录不是您自己的正常登录行为，很有可能密码已经泄露，建议您尽快修改密码。",
+      "ValueDisplay": "本次登录的来源IP非您自主定义的合法IP范围，若本次登录确认为自己的正常登录，建议您增加合法IP范畴，避免再次告警给您带来困扰，若本次登录不是您自己的正常登录行为，很有可能密码已经泄露，建议您尽快修改密码。"
+    },
+    {
+      "NameDisplay": "处置建议",
+      "Type": "html",
+      "Value": "在一定的小概率下，云盾可能会将管理员因为忘记或者输错密码导致的重复尝试误判为爆破成功，请根据告警详情中展示的账号以及时间，进行排查，一旦确认不是管理员主动行为，建议立即封禁该 IP，同时您可以开通[特权访问管理中心](https://yundun.console.aliyun.com/?p=pam)，托管主机登录口令，提升远程连接效率及安全管控能力，并依据[ECS账号安全防护最佳实践](https://click.aliyun.com/m/1000226086/)修改登录口令及收敛资产暴露面。同时可以检查sshd_config或注册表，确认远程登录端口是否加入了安全组的限制。",
+      "ValueDisplay": "在一定的小概率下，云盾可能会将管理员因为忘记或者输错密码导致的重复尝试误判为爆破成功，请根据告警详情中展示的账号以及时间，进行排查，一旦确认不是管理员主动行为，建议立即封禁该 IP，同时您可以开通[特权访问管理中心](https://yundun.console.aliyun.com/?p=pam)，托管主机登录口令，提升远程连接效率及安全管控能力，并依据[ECS账号安全防护最佳实践](https://click.aliyun.com/m/1000226086/)修改登录口令及收敛资产暴露面。同时可以检查sshd_config或注册表，确认远程登录端口是否加入了安全组的限制。"
+    }
+  ],
+  "DisplaySandboxResult": false,
+  "EventStatus": 8,
+  "EventSubType": "login_common_ip",
+  "HasTraceInfo": true,
+  "Id": 700476004,
+  "InstanceId": "VMware-42 2f e3 b6 3e 62 15 23-78 1a 41 ac 03 e0 b7 2d",
+  "InstanceName": "zy-nph-test-ops-zf-gitlab-new02",
+  "IntranetIp": "172.30.231.209",
+  "LastTime": "2026-10-24 19:07:55",
+  "LastTimeStamp": 1792840075000,
+  "Level": "suspicious",
+  "MarkMisRules": "1.  登录源IP  等于  18.167.5.81",
+  "Name": "异常登录-ECS非常用IP登录",
+  "OccurrenceTime": "2026-07-11 12:29:26",
+  "OccurrenceTimeStamp": 1783744166000,
+  "OperateErrorCode": "advance_mark_mis_info.User.Success",
+  "OperateMsg": "",
+  "OperateTime": 1783745277000,
+  "SaleVersion": "0",
+  "SecurityEventIds": "700476004",
+  "Stages": "[\"凭据窃取\"]",
+  "TacticItems": [
+    {
+      "TacticDisplayName": "凭据窃取",
+      "TacticId": "TA0006"
+    }
+  ],
+  "UniqueInfo": "62f6c025ac41595d2ad23d97977aae88",
+  "Uuid": "inet-ff2e2c6e-b85f-41c6-a808-b4952ed0bae4"
+}

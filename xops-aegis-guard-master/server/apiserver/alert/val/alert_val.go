@@ -124,9 +124,12 @@ type AlertDetailResp struct {
 	ConfirmedBy       string     `json:"confirmed_by"`
 	ConfirmedAt       *time.Time `json:"confirmed_at"`
 	LastPayload       string     `json:"last_payload"`
+	LastMessage       string     `json:"last_message"`
 	ConfirmationCount int64      `json:"confirmation_count"`
 	ConfirmedCount    int64      `json:"confirmed_count"`
 	PendingCount      int64      `json:"pending_count"`
+	NotificationSent  bool       `json:"notification_sent"`
+	NotificationError string     `json:"notification_error"`
 }
 
 type AlertHistoryResp struct {

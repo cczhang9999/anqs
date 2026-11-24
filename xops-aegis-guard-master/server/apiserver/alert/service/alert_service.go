@@ -395,9 +395,6 @@ func ConfirmBatch(req *alertval.ConfirmAlertsReq) ([]alertval.AlertDetailResp, e
 				}
 			}
 		}
-		if results[i].Status == "confirmed" && !results[i].NotificationSent && results[i].NotificationError == "" {
-			results[i].NotificationError = "该告警已确认，未重复发送通知"
-		}
 	}
 	return results, nil
 }
@@ -904,18 +901,11 @@ func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, by, note string, 
 	if s == nil || s.notifier == nil || row == nil {
 		return fmt.Errorf("通知服务不可用")
 	}
-	device := s.notificationDevice(row)
-	message := s.alertGroupMessage(row, device, by, note, confirmedAt)
-	if s.notifier.TelegramEnabled() {
-		if err := s.notifier.NotifyTelegram(context.Background(), message); err != nil {
-			logger.Warnf("send alert notification to telegram failed: alert_id=%d error=%v", row.ID, err)
-			return fmt.Errorf("发送 Telegram 告警群消息失败：%w", err)
-		}
-		return nil
-	}
-	if !s.notifier.RobotEnabled() {
+	if !s.notifier.Enabled() {
 		return fmt.Errorf("机器人通知未启用")
 	}
+	device := s.notificationDevice(row)
+	message := s.alertGroupMessage(row, device, by, note, confirmedAt)
 	robotID := 0
 	dutyUser := ""
 	departmentID := uint(0)
@@ -956,18 +946,6 @@ func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, by, note string, 
 func (s *Service) notifyConfirmedMessage(row *alertmodel.SecurityAlert, by, note string, confirmedAt time.Time) (bool, error) {
 	if s == nil || s.notifier == nil || row == nil {
 		return false, fmt.Errorf("通知服务不可用")
-	}
-	if s.notifier.TelegramEnabled() {
-		var device *devicemodel.Device
-		if isLoginGroupAlert(row) && row.DeviceID != 0 {
-			device, _ = devicedao.Get(row.DeviceID)
-		}
-		message := s.alertGroupMessage(row, device, by, note, &confirmedAt)
-		if err := s.notifier.NotifyTelegram(context.Background(), message); err != nil {
-			logger.Warnf("send confirmed alert to telegram failed: alert_id=%d error=%v", row.ID, err)
-			return false, fmt.Errorf("发送 Telegram 告警群消息失败：%w", err)
-		}
-		return true, nil
 	}
 	if err := s.notifyMessage(row, by, note, &confirmedAt); err != nil {
 		return false, err

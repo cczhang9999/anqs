@@ -225,14 +225,15 @@ func Preview(req *val.PreviewRuleReq) (*val.PreviewResp, error) {
 
 // Execute 立即执行：清理失效归属，再写入命中规则的主机归属。
 func Execute(req *val.ExecuteRuleReq) (*val.ExecuteResp, error) {
-	assigned, cleared, err := executePlan()
+	assigned, cleared, err := Apply()
 	if err != nil {
 		return nil, err
 	}
 	return &val.ExecuteResp{Assigned: assigned, Cleared: cleared}, nil
 }
 
-func executePlan() (int64, int64, error) {
+// Apply 执行分组计划，供设备同步和手动执行共用。
+func Apply() (int64, int64, error) {
 	total, plan, stale, err := buildPlan()
 	if err != nil {
 		return 0, 0, err

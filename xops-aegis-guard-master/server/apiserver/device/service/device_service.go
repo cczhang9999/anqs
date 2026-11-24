@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"xops-aegis-guard/server/apiserver/device/model"
 	"xops-aegis-guard/server/apiserver/device/val"
 	groupruledao "xops-aegis-guard/server/apiserver/grouprule/dao"
+	groupruleservice "xops-aegis-guard/server/apiserver/grouprule/service"
 	"xops-aegis-guard/util/pager"
 
 	"github.com/jinzhu/copier"
@@ -164,6 +166,9 @@ func Sync() error {
 		}
 	}
 	logger.Infof("aliyun devices synced: count=%d", len(devices))
+	if _, _, err := groupruleservice.Apply(); err != nil {
+		return fmt.Errorf("apply group rules after device sync: %w", err)
+	}
 	return nil
 }
 

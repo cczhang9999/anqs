@@ -17,9 +17,8 @@ import (
 // Notifier 按现有服务使用的 robot-new 接口发送通知。
 // 按接口约定，不发送认证信息和 im_name。
 type Notifier struct {
-	cfg      config.Robot
-	telegram config.Telegram
-	client   *http.Client
+	cfg    config.Robot
+	client *http.Client
 }
 
 const (
@@ -28,86 +27,19 @@ const (
 	// 截断后保留的头部和尾部长度总和应低于消息上限。
 	robotHeadUnits = 2400
 	robotTailUnits = 700
-	// Telegram echoes sent text in its response, including multibyte characters.
-	notificationResponseLimit = 64 << 10
 )
 
-func NewNotifier(cfg config.Robot, telegram ...config.Telegram) *Notifier {
-	var telegramCfg config.Telegram
-	if len(telegram) > 0 {
-		telegramCfg = telegram[0]
-	}
-	return &Notifier{cfg: cfg, telegram: telegramCfg, client: &http.Client{Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second}}
+func NewNotifier(cfg config.Robot) *Notifier {
+	return &Notifier{cfg: cfg, client: &http.Client{Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second}}
 }
 
-func (n *Notifier) TelegramEnabled() bool {
-	return n != nil && n.telegram.Enabled
-}
-
-func (n *Notifier) RobotEnabled() bool {
+func (n *Notifier) Enabled() bool {
 	return n != nil && n.cfg.Enabled
 }
 
-// NotifyTelegram sends plain text directly to the configured Telegram chat.
-func (n *Notifier) NotifyTelegram(ctx context.Context, text string) error {
-	if n == nil || !n.telegram.Enabled {
-		return nil
-	}
-	token := strings.TrimSpace(n.telegram.BotToken)
-	chatID := strings.TrimSpace(n.telegram.ChatID)
-	if token == "" {
-		return fmt.Errorf("telegram bot token is empty")
-	}
-	if chatID == "" {
-		return fmt.Errorf("telegram chat id is empty")
-	}
-	endpoint := "https://api.telegram.org/bot" + token + "/sendMessage"
-	body, err := stdjson.Marshal(map[string]any{
-		"chat_id": chatID,
-		"text":    truncateRobotMessage(text),
-	})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("invalid telegram request")
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := n.client.Do(req)
-	if err != nil {
-		// The request URL includes the bot token, so never propagate a transport
-		// error that could print the URL into application logs.
-		return fmt.Errorf("telegram request failed")
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, notificationResponseLimit))
-	if err != nil {
-		return err
-	}
-	var result struct {
-		OK          bool   `json:"ok"`
-		Description string `json:"description"`
-	}
-	decodeErr := stdjson.Unmarshal(respBody, &result)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if decodeErr == nil && result.Description != "" {
-			return fmt.Errorf("telegram returned status %d: %s", resp.StatusCode, strings.ReplaceAll(result.Description, token, "[redacted]"))
-		}
-		return fmt.Errorf("telegram returned status %d", resp.StatusCode)
-	}
-	if decodeErr != nil {
-		return fmt.Errorf("decode telegram response: %w", decodeErr)
-	}
-	if !result.OK {
-		return fmt.Errorf("telegram rejected message: %s", strings.ReplaceAll(result.Description, token, "[redacted]"))
-	}
-	return nil
-}
-
 func (n *Notifier) Notify(ctx context.Context, robotID int, text string) error {
-	if n == nil || !n.cfg.Enabled {
-		return nil
+	if !n.Enabled() {
+		return fmt.Errorf("机器人通知未启用")
 	}
 	if robotID == 0 {
 		return fmt.Errorf("robot id is empty")
@@ -138,11 +70,14 @@ func (n *Notifier) Notify(ctx context.Context, robotID int, text string) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("robot-new returned status %d", resp.StatusCode)
 	}
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, notificationResponseLimit))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
 	if err != nil {
 		return fmt.Errorf("read robot-new response: %w", err)
 	}
-	if bytes.HasPrefix(bytes.TrimSpace(respBody), []byte("{")) {
+	if len(respBody) > 64<<10 {
+		return fmt.Errorf("robot-new response exceeds size limit")
+	}
+	if len(bytes.TrimSpace(respBody)) > 0 {
 		var result struct {
 			Code *int `json:"code"`
 		}

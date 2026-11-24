@@ -29,6 +29,9 @@ func TestNotifyRobotDeliveryResult(t *testing.T) {
 		{name: "code 200", status: 200, body: `{"code":200}`},
 		{name: "relay rejection with HTTP success", status: 200, body: `{"code":-1}`, wantErr: "code -1"},
 		{name: "HTTP failure", status: 502, wantErr: "status 502"},
+		{name: "malformed response", status: 200, body: `{"code":`, wantErr: "decode"},
+		{name: "proxy HTML", status: 200, body: `<html>login</html>`, wantErr: "decode"},
+		{name: "oversized response", status: 200, body: strings.Repeat(" ", 65537), wantErr: "size limit"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			notifier := NewNotifier(config.Robot{Enabled: true, URL: "http://robot.local", SourceName: "ANQS"})
@@ -53,38 +56,10 @@ func TestNotifyRobotDeliveryResult(t *testing.T) {
 	}
 }
 
-func TestNotifyTelegramDeliveryResult(t *testing.T) {
-	const token = "12345:example-token"
-	t.Run("long confirmation accepted", func(t *testing.T) {
-		message := strings.Repeat("确认告警", 600)
-		notifier := NewNotifier(config.Robot{}, config.Telegram{Enabled: true, BotToken: token, ChatID: "-100123"})
-		notifier.client.Transport = notificationTransport(func(req *http.Request) (*http.Response, error) {
-			var payload struct {
-				ChatID string `json:"chat_id"`
-				Text   string `json:"text"`
-			}
-			if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
-				t.Fatal(err)
-			}
-			if req.URL.Host != "api.telegram.org" || payload.ChatID != "-100123" || payload.Text != message {
-				t.Fatal("unexpected Telegram delivery request")
-			}
-			body := `{"ok":true,"result":{"text":"` + payload.Text + `"}}`
-			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body))}, nil
-		})
-		if err := notifier.NotifyTelegram(context.Background(), message); err != nil {
-			t.Fatal(err)
+func TestNotifyDisabled(t *testing.T) {
+	for _, notifier := range []*Notifier{nil, NewNotifier(config.Robot{})} {
+		if err := notifier.Notify(context.Background(), 42, "告警确认"); err == nil {
+			t.Fatal("disabled notifier must not report successful delivery")
 		}
-	})
-	t.Run("rejection exposes reason and redacts token", func(t *testing.T) {
-		notifier := NewNotifier(config.Robot{}, config.Telegram{Enabled: true, BotToken: token, ChatID: "-100123"})
-		notifier.client.Transport = notificationTransport(func(req *http.Request) (*http.Response, error) {
-			body := `{"ok":false,"description":"Forbidden: bot cannot send messages ` + token + `"}`
-			return &http.Response{StatusCode: 403, Body: io.NopCloser(strings.NewReader(body))}, nil
-		})
-		err := notifier.NotifyTelegram(context.Background(), "告警确认")
-		if err == nil || !strings.Contains(err.Error(), "bot cannot send messages") || strings.Contains(err.Error(), token) {
-			t.Fatalf("unexpected Telegram rejection: %v", err)
-		}
-	})
+	}
 }

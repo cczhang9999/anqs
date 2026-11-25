@@ -175,6 +175,13 @@ func SourceStats() (rule, manual, unassigned int64, err error) {
 	return
 }
 
+// ListUnassigned 返回仍待分组的主机。
+func ListUnassigned() ([]model.Device, error) {
+	var rows []model.Device
+	err := db.GetOrm().Where("department_id = ?", 0).Order("id ASC").Find(&rows).Error
+	return rows, err
+}
+
 // ListGroupingCandidates 同时读取未分配主机及需要复核的自动/无来源归属。
 func ListGroupingCandidates() ([]model.Device, error) {
 	var rows []model.Device

@@ -227,11 +227,39 @@ func Execute(req *val.ExecuteRuleReq) (*val.ExecuteResp, error) {
 	return &val.ExecuteResp{Assigned: assigned, Cleared: cleared}, nil
 }
 
+// AssignUnassigned 在设备同步后为尚未分配的主机应用规则。
+func AssignUnassigned() error {
+	devices, err := devicedao.ListUnassigned()
+	if err != nil || len(devices) == 0 {
+		return err
+	}
+	rules, err := compileRules()
+	if err != nil {
+		return err
+	}
+	total, plan, _ := planDevices(rules, devices)
+	assigned, _, err := applyPlan(plan, nil)
+	if err != nil {
+		return err
+	}
+	logger.Infof("automatic group rules executed: unassigned=%d matched=%d assigned=%d", total, len(plan), assigned)
+	return nil
+}
+
 func executePlan() (int64, int64, error) {
 	total, plan, stale, err := buildPlan()
 	if err != nil {
 		return 0, 0, err
 	}
+	assigned, cleared, err := applyPlan(plan, stale)
+	if err != nil {
+		return 0, 0, err
+	}
+	logger.Infof("group rules executed: unassigned=%d matched=%d assigned=%d cleared=%d", total, len(plan), assigned, cleared)
+	return assigned, cleared, nil
+}
+
+func applyPlan(plan []plannedAssignment, stale []devicemodel.Device) (int64, int64, error) {
 	assignments := make([]devicedao.RuleAssignment, 0, len(plan))
 	for _, item := range plan {
 		assignments = append(assignments, devicedao.RuleAssignment{
@@ -243,12 +271,7 @@ func executePlan() (int64, int64, error) {
 			RuleName:     item.rule.Name,
 		})
 	}
-	assigned, cleared, err := devicedao.ApplyRuleAssignments(assignments, stale, time.Now())
-	if err != nil {
-		return 0, 0, err
-	}
-	logger.Infof("group rules executed: unassigned=%d matched=%d assigned=%d cleared=%d", total, len(plan), assigned, cleared)
-	return assigned, cleared, nil
+	return devicedao.ApplyRuleAssignments(assignments, stale, time.Now())
 }
 
 type compiledRule struct {

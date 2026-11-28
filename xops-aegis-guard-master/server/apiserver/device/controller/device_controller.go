@@ -39,6 +39,11 @@ func GetDevices(ctx *gin.Context) {
 	httper.HandleResponse(ctx, err, val.DeviceListResp{Items: rows, Total: int64(len(rows))})
 }
 
+func GetMemberDevices(ctx *gin.Context) {
+	rows, err := service.ListByMember(middleware.TokenUserID(ctx))
+	httper.HandleResponse(ctx, err, val.DeviceListResp{Items: rows, Total: int64(len(rows))})
+}
+
 func GetSimpleDevices(ctx *gin.Context) {
 	req := &val.GetSimpleDevicesReq{}
 	req.AuthUser, _ = middleware.GetUserFromContext(ctx)

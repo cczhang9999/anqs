@@ -24,17 +24,27 @@ func Upsert(device *model.Device) error {
 	if err != nil {
 		return err
 	}
-	return orm.Model(&existing).Updates(map[string]interface{}{
-		"instance_id": device.InstanceID, "instance_name": device.InstanceName,
-		"private_ip": device.PrivateIP, "os_name": device.OSName,
-	}).Error
+	updates := map[string]interface{}{
+		"instance_id": device.InstanceID,
+		"private_ip":  device.PrivateIP,
+		"os_name":     device.OSName,
+	}
+	// Security Center can intermittently omit InstanceName from an asset
+	// snapshot. Do not erase a name already learned from an earlier sync.
+	if strings.TrimSpace(device.InstanceName) != "" {
+		updates["instance_name"] = device.InstanceName
+	}
+	return orm.Model(&existing).Updates(updates).Error
 }
 
 func List(limit, offset int, keyword, ip string, departmentID *uint, source string) ([]model.Device, int64, error) {
 	query := db.GetOrm().Model(&model.Device{})
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		query = query.Where("instance_name LIKE ? OR instance_id LIKE ? OR private_ip LIKE ? OR aliyun_uuid LIKE ?", like, like, like, like)
+		// The UI's keyword field is for host / instance names. Keep IPs in the
+		// dedicated IP filter and avoid matching internal IDs or cloud UUIDs,
+		// which can otherwise return hosts whose displayed name is unrelated.
+		query = query.Where("instance_name LIKE ?", like)
 	}
 	if ip != "" {
 		like := "%" + ip + "%"
@@ -78,6 +88,16 @@ func Stats() (total, assigned, unassigned int64, err error) {
 func All() ([]model.Device, error) {
 	var rows []model.Device
 	err := db.GetOrm().Order("id DESC").Find(&rows).Error
+	return rows, err
+}
+
+// ListByDepartments 返回这些部门下的主机，以及未分组主机。部门列表为空时不查表。
+func ListByDepartments(departmentIDs []uint) ([]model.Device, error) {
+	if len(departmentIDs) == 0 {
+		return []model.Device{}, nil
+	}
+	var rows []model.Device
+	err := db.GetOrm().Where("department_id = ? OR department_id IN ?", 0, departmentIDs).Order("id DESC").Find(&rows).Error
 	return rows, err
 }
 
@@ -173,6 +193,13 @@ func SourceStats() (rule, manual, unassigned int64, err error) {
 		return
 	}
 	return
+}
+
+// ListUnassigned 返回仍待分组的主机。
+func ListUnassigned() ([]model.Device, error) {
+	var rows []model.Device
+	err := db.GetOrm().Where("department_id = ?", 0).Order("id ASC").Find(&rows).Error
+	return rows, err
 }
 
 // ListGroupingCandidates 同时读取未分配主机及需要复核的自动/无来源归属。

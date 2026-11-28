@@ -30,6 +30,15 @@ func whoAmI(ctx *gin.Context) *user.AuthUser {
 	}
 }
 
+// TokenUserID 只认请求里的登录令牌。令牌缺失或无法解析时返回 0，不用内部调用的默认用户。
+func TokenUserID(ctx *gin.Context) int {
+	u, err := jwt.ParseToken(ctx.GetHeader("Auth-Token"))
+	if err != nil || u == nil || u.UserId <= 0 {
+		return 0
+	}
+	return u.UserId
+}
+
 // GetUserFromContext 从 context 获取当前用户。
 func GetUserFromContext(ctx *gin.Context) (authUser *user.AuthUser, exists bool) {
 	value, exists := ctx.Get(ctxLoginUserKey)

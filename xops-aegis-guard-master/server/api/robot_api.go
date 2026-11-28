@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	stdjson "encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -31,9 +33,13 @@ func NewNotifier(cfg config.Robot) *Notifier {
 	return &Notifier{cfg: cfg, client: &http.Client{Timeout: time.Duration(cfg.TimeoutSeconds) * time.Second}}
 }
 
+func (n *Notifier) Enabled() bool {
+	return n != nil && n.cfg.Enabled
+}
+
 func (n *Notifier) Notify(ctx context.Context, robotID int, text string) error {
-	if n == nil || !n.cfg.Enabled {
-		return nil
+	if !n.Enabled() {
+		return fmt.Errorf("机器人通知robot:enabled未启用")
 	}
 	if robotID == 0 {
 		return fmt.Errorf("robot id is empty")
@@ -63,6 +69,24 @@ func (n *Notifier) Notify(ctx context.Context, robotID int, text string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("robot-new returned status %d", resp.StatusCode)
+	}
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, (64<<10)+1))
+	if err != nil {
+		return fmt.Errorf("read robot-new response: %w", err)
+	}
+	if len(respBody) > 64<<10 {
+		return fmt.Errorf("robot-new response exceeds size limit")
+	}
+	if len(bytes.TrimSpace(respBody)) > 0 {
+		var result struct {
+			Code *int `json:"code"`
+		}
+		if err := stdjson.Unmarshal(respBody, &result); err != nil {
+			return fmt.Errorf("decode robot-new response: %w", err)
+		}
+		if result.Code != nil && *result.Code != 0 && *result.Code != http.StatusOK {
+			return fmt.Errorf("robot-new rejected message (code %d)", *result.Code)
+		}
 	}
 	return nil
 }

@@ -97,14 +97,15 @@ type RuleStatsResp struct {
 }
 
 type PreviewItem struct {
-	DeviceID            uint   `json:"device_id"`
-	InstanceName        string `json:"instance_name"`
-	PrivateIP           string `json:"private_ip"`
-	CurrentDepartmentID uint   `json:"current_department_id"`
-	DepartmentID        uint   `json:"department_id"`
-	DepartmentName      string `json:"department_name"`
-	RuleID              uint   `json:"rule_id"`
-	RuleName            string `json:"rule_name"`
+	DeviceID            uint              `json:"device_id"`
+	InstanceName        string            `json:"instance_name"`
+	PrivateIP           string            `json:"private_ip"`
+	CurrentDepartmentID uint              `json:"current_department_id"`
+	DepartmentID        uint              `json:"department_id"`
+	DepartmentName      string            `json:"department_name"`
+	RuleID              uint              `json:"rule_id"`
+	RuleName            string            `json:"rule_name"`
+	MatchConditions     []model.Condition `json:"match_conditions"`
 }
 
 type PreviewResp struct {
@@ -171,7 +172,9 @@ func (r *SaveRuleReq) Check() []error {
 		}
 		if tools.IsIPOperator(operator) {
 			if _, err := tools.CompileConditions([]model.Condition{condition}); err != nil {
-				errs = append(errs, fmt.Errorf("第%d个条件的 IP 或 CIDR 网段格式错误", index+1))
+				// Keep the parser's detail so users can identify the invalid item in
+				// a comma-separated list of IPs and CIDR prefixes.
+				errs = append(errs, err)
 			}
 		}
 	}

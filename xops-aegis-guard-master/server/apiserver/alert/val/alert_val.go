@@ -127,6 +127,8 @@ type AlertDetailResp struct {
 	ConfirmationCount int64      `json:"confirmation_count"`
 	ConfirmedCount    int64      `json:"confirmed_count"`
 	PendingCount      int64      `json:"pending_count"`
+	NotificationSent  bool       `json:"notification_sent"`
+	NotificationError string     `json:"notification_error,omitempty"`
 }
 
 type AlertHistoryResp struct {

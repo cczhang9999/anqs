@@ -28,20 +28,31 @@ type Server struct {
 }
 
 type Database struct {
-	Debug           bool   `mapstructure:"debug"`
-	Connection      string `mapstructure:"connection"`
-	ConnMaxLifeTime int    `mapstructure:"connmaxlifetime"`
-	MaxOpen         int    `mapstructure:"maxopenconns"`
-	MaxIdle         int    `mapstructure:"maxidleconns"`
-	Colorful        bool   `mapstructure:"colorful"`
+	Debug                    bool   `mapstructure:"debug"`
+    Connection               string `mapstructure:"connection"`
+    ConnMaxLifeTime          int    `mapstructure:"connmaxlifetime"`
+    MaxOpen                  int    `mapstructure:"maxopenconns"`
+    MaxIdle                  int    `mapstructure:"maxidleconns"`
+    Colorful                 bool   `mapstructure:"colorful"`
+    VaultCredentialsFile     string `mapstructure:"vault_credentials_file"`
+    VaultRefreshSeconds      int    `mapstructure:"vault_refresh_interval_seconds"`
+    VaultInitialWaitSeconds  int    `mapstructure:"vault_initial_wait_seconds"`
+    VaultDrainSeconds        int    `mapstructure:"vault_drain_timeout_seconds"`
+    VaultMinimumDrainSeconds int    `mapstructure:"vault_minimum_drain_seconds"`
 }
 
 type Redis struct {
-	Mode     string     `mapstructure:"mode"`
-	Addrs    []string   `mapstructure:"addrs"`
-	Password string     `mapstructure:"password"`
-	DB       int        `mapstructure:"db"`
-	Pool     *RedisPool `mapstructure:"pool"`
+	Mode                     string     `mapstructure:"mode"`
+    Addrs                    []string   `mapstructure:"addrs"`
+    Username                 string     `mapstructure:"username"`
+    Password                 string     `mapstructure:"password"`
+    DB                       int        `mapstructure:"db"`
+    VaultCredentialsFile     string     `mapstructure:"vault_credentials_file"`
+    VaultRefreshSeconds      int        `mapstructure:"vault_refresh_interval_seconds"`
+    VaultInitialWaitSeconds  int        `mapstructure:"vault_initial_wait_seconds"`
+    VaultDrainSeconds        int        `mapstructure:"vault_drain_timeout_seconds"`
+    VaultMinimumDrainSeconds int        `mapstructure:"vault_minimum_drain_seconds"`
+    Pool                     *RedisPool `mapstructure:"pool"`
 }
 
 type RedisPool struct {
@@ -101,6 +112,9 @@ func Load(path string) (*Config, error) {
 	if err := v.ReadInConfig(); err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
+	if err := loadVaultOverlay(v); err != nil {
+    	return nil, err
+    }
 	var c Config
 	if err := v.Unmarshal(&c); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)

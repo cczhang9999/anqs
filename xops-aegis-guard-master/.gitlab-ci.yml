@@ -67,7 +67,7 @@ variables:
       cd manifests/${YAML_PATH}
 
       # 批量替换模板变量
-      for manifest in deployment.yaml istio.yaml; do
+      for manifest in deployment.yaml istio.yaml vault.yaml; do
         if [ ! -f "$manifest" ]; then
           continue
         fi

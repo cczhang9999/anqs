@@ -8,6 +8,7 @@ func RegisterDeviceRoute(r *gin.RouterGroup) {
 	r.DELETE("/device", DeleteDevice)
 	r.GET("/device/:id", GetDevice)
 	r.GET("/devices", GetDevices)
+	r.GET("/member-devices", GetMemberDevices)
 	r.GET("/devicesimple", GetSimpleDevices)
 	r.GET("/devicelist", ListDevices)
 	r.GET("/devicestats", GetDeviceStats)

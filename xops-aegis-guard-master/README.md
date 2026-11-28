@@ -41,7 +41,8 @@
 - 归属来源会随主机保存：`assign_source=rule` 记录规则 ID 与规则名称快照（规则删除后仍显示「规则：xxx（已删除）」），`assign_source=manual` 记录操作人；把主机改回「未分配」即交还给规则，下次执行时重新匹配。
 - 规则接口：`GET/POST/PUT/DELETE /v1/group-rules|group-rule`、`PUT /v1/group-rule-enabled`、`PUT /v1/group-rule-order`（`top/up/down`）、`GET /v1/group-rulestats`、`GET /v1/group-rule-preview`（试运行，不写库）、`POST /v1/group-rule-execute`（确认后一次性写入）。
 - 设备接口新增 `source=rule|manual|unassigned` 筛选，响应包含 `assign_source`、`assign_rule_name`、`assign_rule_deleted`、`assign_operator`、`assigned_at`；`PUT /v1/device-departments` 传 `department_id=0` 表示批量交还给规则。
-- 分组规则可通过 `GET /v1/group-rule-preview` 预览，确认后调用 `POST /v1/group-rule-execute` 立即执行；保存规则本身不会自动执行分组。
+- 每次设备同步完成后执行分组规则，新同步或仍未分配的主机无需人工执行即可归属；手动归属保持不变。规则已有归属会按当前条件复核，失效时清理后重新匹配。
+- 分组规则可通过 `GET /v1/group-rule-preview` 预览，确认后调用 `POST /v1/group-rule-execute` 立即执行；保存规则后也会在下一次设备同步时生效。
 - 部门下仍被规则引用时禁止删除部门，避免规则指向不存在的目标部门。
 
 ## 启动

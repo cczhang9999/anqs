@@ -32,6 +32,8 @@ func Create(req *val.SaveDepartmentReq) error {
 
 func List(req *val.GetDepartmentsReq) ([]model.Department, error) { return dao.List() }
 
+func ListByMember(userID int) ([]model.Department, error) { return dao.ListByMember(userID) }
+
 func ListPage(req *val.ListDepartmentReq) ([]model.Department, int64, int, int, error) {
 	limit, offset := pager.Parse(strconv.Itoa(req.Limit), strconv.Itoa(req.Offset))
 	rows, total, err := dao.ListPage(limit, offset)

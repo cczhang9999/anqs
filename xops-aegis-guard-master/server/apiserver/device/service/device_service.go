@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"xops-aegis-guard/server/apiserver/device/model"
 	"xops-aegis-guard/server/apiserver/device/val"
 	groupruledao "xops-aegis-guard/server/apiserver/grouprule/dao"
+	groupruleservice "xops-aegis-guard/server/apiserver/grouprule/service"
 	"xops-aegis-guard/util/pager"
 
 	"github.com/jinzhu/copier"
@@ -64,6 +66,32 @@ func Stats(req *val.GetDeviceStatsReq) (total, assigned, unassigned int64, err e
 
 func All(req *val.GetDevicesReq) ([]val.DeviceResp, error) {
 	rows, err := dao.All()
+	if err != nil {
+		return nil, err
+	}
+	return toDeviceResps(rows)
+}
+
+// ListByMember 返回用户所在部门的主机，并包含未分组主机。
+// 用户无效或未加入任何部门时返回空列表。
+func ListByMember(userID int) ([]val.DeviceResp, error) {
+	if userID <= 0 {
+		return []val.DeviceResp{}, nil
+	}
+	departments, err := departmentdao.ListByMember(userID)
+	if err != nil {
+		return nil, err
+	}
+	departmentIDs := make([]uint, 0, len(departments))
+	for _, department := range departments {
+		if department.ID > 0 {
+			departmentIDs = append(departmentIDs, department.ID)
+		}
+	}
+	if len(departmentIDs) == 0 {
+		return []val.DeviceResp{}, nil
+	}
+	rows, err := dao.ListByDepartments(departmentIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +192,9 @@ func Sync() error {
 		}
 	}
 	logger.Infof("aliyun devices synced: count=%d", len(devices))
+	if err := groupruleservice.AssignUnassigned(); err != nil {
+		return fmt.Errorf("apply group rules after device sync: %w", err)
+	}
 	return nil
 }
 

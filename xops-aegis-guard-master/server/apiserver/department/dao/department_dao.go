@@ -2,6 +2,7 @@ package dao
 
 import (
 	"errors"
+	"strconv"
 
 	"xops-aegis-guard/pkg/db"
 	"xops-aegis-guard/server/apiserver/department/model"
@@ -20,6 +21,19 @@ func Get(id uint) (*model.Department, error) {
 func List() ([]model.Department, error) {
 	var rows []model.Department
 	err := db.GetOrm().Order("id DESC").Find(&rows).Error
+	return rows, err
+}
+
+// ListByMember 只返回 member_ids 里包含该用户的部门。用户无效时返回空列表，不查全表。
+func ListByMember(userID int) ([]model.Department, error) {
+	if userID <= 0 {
+		return []model.Department{}, nil
+	}
+	var rows []model.Department
+	err := db.GetOrm().
+		Where("JSON_CONTAINS(member_ids, ?)", strconv.Itoa(userID)).
+		Order("id DESC").
+		Find(&rows).Error
 	return rows, err
 }
 

@@ -38,15 +38,18 @@ func main() {
 		logger.Errorf("open database failed: %v", err)
 		os.Exit(1)
 	}
+	defer db.CloseDB()
 	if err := db.InitRedis(conf.Redis); err != nil {
 		logger.Errorf("open redis failed: %v", err)
 		os.Exit(1)
 	}
 	defer db.RedisClose()
-	if client := db.RedisUniversalClient(); client != nil {
-		cache.Default = rediscache.NewCache(client)
+	cache.Default = rediscache.NewCache(db.RedisUniversalClient())
+    if db.VaultEnabled(conf.Database) {
+    	logger.Info("[Vault] skip database migrations for dynamic credentials")
+   	} else {
+		initModel()
 	}
-	initModel()
 	masker := desensitize.NewMasker(conf.Desensitize)
 	clients, err := aliyun.NewClients(conf.Aliyun)
 	if err != nil {

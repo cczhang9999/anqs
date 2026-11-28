@@ -29,6 +29,11 @@ func ListDepartments(ctx *gin.Context) {
 	httper.HandleResponse(ctx, err, val.DepartmentListResp{Items: rows})
 }
 
+func ListMemberDepartments(ctx *gin.Context) {
+	rows, err := service.ListByMember(middleware.TokenUserID(ctx))
+	httper.HandleResponse(ctx, err, val.DepartmentListResp{Items: rows})
+}
+
 func ListDepartmentsWithPage(ctx *gin.Context) {
 	req := &val.ListDepartmentReq{}
 	req.AuthUser, _ = middleware.GetUserFromContext(ctx)

@@ -10,6 +10,7 @@ import (
 	"xops-aegis-guard/desensitize"
 	"xops-aegis-guard/logger"
 	alertmodel "xops-aegis-guard/server/apiserver/alert/model"
+	alerttools "xops-aegis-guard/server/apiserver/alert/tools"
 	jsonutil "xops-aegis-guard/util/json"
 
 	htmlparser "golang.org/x/net/html"
@@ -33,6 +34,7 @@ func maskAlertContent(row *alertmodel.SecurityAlert) {
 	if row == nil {
 		return
 	}
+	defer func() { row.ContentHash = alerttools.ContentHash(row.LastMessage) }()
 	var masker *desensitize.Masker
 	if instance != nil {
 		masker = instance.masker

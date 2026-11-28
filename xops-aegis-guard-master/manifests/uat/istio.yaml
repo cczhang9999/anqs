@@ -21,6 +21,7 @@ spec:
         - source:
             principals:
               - cluster.local/ns/xops/sa/xops-front-__CI_ENVIRONMENT_NAME__
+              - cluster.local/ns/xops/sa/xops-vulnerability-__CI_ENVIRONMENT_NAME__
 
 ---
 apiVersion: telemetry.istio.io/v1

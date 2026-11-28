@@ -210,6 +210,13 @@ func ListHistory(req *alertval.ListAlertHistoryReq) ([]alertval.AlertHistoryItem
 	if err := ensureAlertVisible(alert, requestUserID(req.AuthUser)); err != nil {
 		return nil, err
 	}
+	if err := alertdao.ReconcileConfirmation(req.ID); err != nil {
+		return nil, err
+	}
+	alert, err = alertdao.Get(req.ID)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := alertdao.ListOccurrences(req.ID)
 	if err != nil {
 		return nil, err
@@ -299,7 +306,8 @@ func Confirm(req *alertval.ConfirmAlertReq) (*alertval.AlertDetailResp, error) {
 		return nil, err
 	}
 	byID, by := confirmationActor(req.AuthUser)
-	changed, err := alertdao.ConfirmOccurrences([]uint{req.ID}, req.OccurrenceID, strings.TrimSpace(req.Note), byID, by, time.Now())
+	note, confirmedAt := strings.TrimSpace(req.Note), time.Now().Truncate(time.Second)
+	changed, err := alertdao.ConfirmOccurrences([]uint{req.ID}, req.OccurrenceID, note, byID, by, confirmedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -308,10 +316,36 @@ func Confirm(req *alertval.ConfirmAlertReq) (*alertval.AlertDetailResp, error) {
 		return nil, err
 	}
 	sanitizeAlertRow(row)
-	if len(changed) > 0 && instance != nil {
-		instance.notifyMessage(row, buildConfirmedAlertMessage(row))
+	if len(changed) == 0 {
+		logger.Infof("alert confirmation produced no new occurrence: alert_id=%d occurrence_id=%d status=%s confirmed_count=%d pending_count=%d; notification skipped", req.ID, req.OccurrenceID, row.Status, row.ConfirmedCount, row.PendingCount)
+		// 没有新的明细被确认：可能是重复提交，也可能是旧数据导致
+		// aggregate 状态与 occurrence 不一致。尝试刷新一次汇总，让
+		// 前端状态正确；若修复后仍是 confirmed，则给出友好的未发送原因。
+		if row.Status != "confirmed" && row.PendingCount == 0 && row.ConfirmedCount > 0 {
+			if reconcileErr := alertdao.ReconcileConfirmation(req.ID); reconcileErr == nil {
+				row, _ = alertdao.Get(req.ID)
+				sanitizeAlertRow(row)
+			}
+		}
+		resp := toAlertDetailResp(row)
+		if row.Status == "confirmed" {
+			resp.NotificationError = "该告警已确认，未重复发送通知"
+		}
+		return resp, nil
 	}
-	return toAlertDetailResp(row), nil
+	resp := toAlertDetailResp(row)
+	if instance == nil {
+		logger.Warnf("alert confirmation notification skipped: alert_id=%d reason=notification service is not initialized", row.ID)
+		resp.NotificationError = "告警通知服务未初始化"
+		return resp, nil
+	}
+	logger.Infof("alert confirmation notification dispatch: alert_id=%d occurrence_id=%d changed_occurrences=%d", row.ID, req.OccurrenceID, len(changed))
+	sent, notifyErr := instance.notifyConfirmedMessage(row, by, note, confirmedAt)
+	resp.NotificationSent = sent
+	if notifyErr != nil {
+		resp.NotificationError = notifyErr.Error()
+	}
+	return resp, nil
 }
 
 func ConfirmBatch(req *alertval.ConfirmAlertsReq) ([]alertval.AlertDetailResp, error) {
@@ -326,7 +360,8 @@ func ConfirmBatch(req *alertval.ConfirmAlertsReq) ([]alertval.AlertDetailResp, e
 		}
 	}
 	byID, by := confirmationActor(req.AuthUser)
-	changed, err := alertdao.ConfirmOccurrences(req.IDs, 0, strings.TrimSpace(req.Note), byID, by, time.Now())
+	note, confirmedAt := strings.TrimSpace(req.Note), time.Now().Truncate(time.Second)
+	changed, err := alertdao.ConfirmOccurrences(req.IDs, 0, note, byID, by, confirmedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -337,10 +372,32 @@ func ConfirmBatch(req *alertval.ConfirmAlertsReq) ([]alertval.AlertDetailResp, e
 			return nil, err
 		}
 		sanitizeAlertRow(row)
-		if instance != nil {
-			instance.notifyMessage(row, buildConfirmedAlertMessage(row))
+		resp := toAlertDetailResp(row)
+		if instance == nil {
+			resp.NotificationError = "告警通知服务未初始化"
+		} else {
+			resp.NotificationSent, err = instance.notifyConfirmedMessage(row, by, note, confirmedAt)
+			if err != nil {
+				resp.NotificationError = err.Error()
+			}
 		}
-		results = append(results, *toAlertDetailResp(row))
+		results = append(results, *resp)
+	}
+	// 部分或全部告警可能因已确认而未进入 changed；对这类状态不一致的
+	// 聚合再刷新一次，确保返回给前端的状态是准确的。
+	for i := range results {
+		if results[i].NotificationError == "" && results[i].Status != "confirmed" &&
+			results[i].PendingCount == 0 && results[i].ConfirmedCount > 0 {
+			if reconcileErr := alertdao.ReconcileConfirmation(results[i].ID); reconcileErr == nil {
+				if refreshed, getErr := alertdao.Get(results[i].ID); getErr == nil {
+					results[i].Status = refreshed.Status
+					results[i].ConfirmedCount = refreshed.ConfirmedCount
+					results[i].PendingCount = refreshed.PendingCount
+					results[i].ConfirmedBy = refreshed.ConfirmedBy
+					results[i].ConfirmedAt = refreshed.ConfirmedAt
+				}
+			}
+		}
 	}
 	return results, nil
 }
@@ -430,7 +487,7 @@ func (s *Service) refreshSparseMessages() error {
 				OccurrenceTime: findValue(payload, "OccurrenceTime", "FirstTime"),
 				LastTime:       findValue(payload, "LastTime", "LatestTime"),
 			}
-			message = buildSuspiciousAlertMessage(item, alertPayloadMap(payload))
+			message = buildSuspiciousAlertMessage(item, alertPayloadMap(payload), device)
 		case "honeypot":
 			payload = expandMergeFieldList(payload)
 			if device == nil {
@@ -509,6 +566,10 @@ func needsMessageRefresh(row *alertmodel.SecurityAlert) bool {
 	message := strings.TrimSpace(stripMarkdownBold(rawMessage))
 	if strings.Contains(rawMessage, "\r") || containsMarkdownBoldLine(rawMessage) {
 		return true
+	}
+	if row.AlertType == "suspicious_event" && isRootLoginAlert(row.Title) {
+		return !strings.Contains(message, "等级标签："+coreSeverityText(row.Severity)) ||
+			!strings.Contains(message, "\n【登录详情】\n")
 	}
 	if !isMissingMessageValue(row.Severity) {
 		expectedSeverity := "告警等级：" + coreSeverityText(row.Severity)
@@ -630,7 +691,7 @@ func (s *Service) collectSuspEvents() error {
 		if device != nil {
 			deviceID = device.ID
 		}
-		message := s.maskMessage(buildSuspiciousAlertMessage(item, alertPayloadMap(payload)))
+		message := s.maskMessage(buildSuspiciousAlertMessage(item, alertPayloadMap(payload), device))
 		now := time.Now()
 		row := &alertmodel.SecurityAlert{Source: "aliyun", ProductType: item.AccountType, AlertType: "suspicious_event", ProviderAlertID: providerID, Fingerprint: fingerprint, Title: item.Title, Severity: normalizeSuspiciousSeverity(item.Level), Status: "firing", DeviceID: deviceID, FirstProviderTime: firstProviderTime, LastSeenAt: now, LastProviderTime: lastProviderTime, OccurrenceCount: 1, LastPayload: marshal(payload), LastMessage: message, ContentHash: alerttools.ContentHash(message)}
 		result, err := alertdao.Upsert(row, alerttools.EventKey(row.AlertType, row.Fingerprint, row.ProviderAlertID, row.LastProviderTime, rawPayload))
@@ -820,13 +881,6 @@ func (s *Service) collectIncidents() error {
 	return s.commitCursor("custom_incident", end, len(events))
 }
 
-func (s *Service) notify(row *alertmodel.SecurityAlert) {
-	if row == nil {
-		return
-	}
-	s.notifyMessage(row, row.LastMessage)
-}
-
 func (s *Service) notifyCollected(row *alertmodel.SecurityAlert, result alertdao.UpsertResult) {
 	if row == nil || !result.Changed() {
 		return
@@ -840,37 +894,84 @@ func (s *Service) notifyCollected(row *alertmodel.SecurityAlert, result alertdao
 		allowed = true
 	}
 	if allowed {
-		s.notify(row)
+		if err := s.notifyMessage(row, "", "", nil); err != nil {
+			logger.Warnf("send collected alert notification failed: alert_id=%d error=%v", row.ID, err)
+		}
 	}
 }
 
-func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, message string) {
+func (s *Service) notifyMessage(row *alertmodel.SecurityAlert, by, note string, confirmedAt *time.Time) error {
 	if s == nil || s.notifier == nil || row == nil {
-		return
+		if row != nil {
+			logger.Warnf("alert notification skipped: alert_id=%d reason=notification service is unavailable", row.ID)
+		}
+		return fmt.Errorf("通知服务不可用")
 	}
+	if !s.notifier.Enabled() {
+		logger.Warnf("alert notification skipped: alert_id=%d reason=robot notifications are disabled", row.ID)
+		return fmt.Errorf("机器人通知未启用")
+	}
+	device := s.notificationDevice(row)
+	message := s.alertGroupMessage(row, device, by, note, confirmedAt)
 	robotID := 0
 	dutyUser := ""
 	departmentID := uint(0)
-	if device := s.notificationDevice(row); device != nil {
+	if device != nil {
 		departmentID = device.DepartmentID
 	}
 	if departmentID == 0 {
-		robotID, _ = departmentdao.GetFallbackRobotID()
+		var err error
+		robotID, err = departmentdao.GetFallbackRobotID()
+		if err != nil {
+			logger.Errorf("resolve fallback alert group failed: alert_id=%d error=%v", row.ID, err)
+			return fmt.Errorf("读取未分组默认告警群失败：%w", err)
+		}
+		if robotID == 0 {
+			logger.Warnf("alert notification skipped: alert_id=%d reason=no associated device or fallback group is configured", row.ID)
+			return fmt.Errorf("告警未关联设备或部门，请在“部门告警群配置”中设置未分组告警默认群")
+		}
 	} else {
 		department, err := departmentdao.Get(departmentID)
-		if err != nil || department == nil || !department.Enabled {
-			return
+		if err != nil {
+			logger.Errorf("resolve department alert group failed: alert_id=%d device_id=%d department_id=%d error=%v", row.ID, device.ID, departmentID, err)
+			return fmt.Errorf("读取部门告警群配置失败：%w", err)
+		}
+		if department == nil || !department.Enabled {
+			logger.Warnf("alert notification skipped: alert_id=%d department_id=%d reason=department alert group is disabled or missing", row.ID, departmentID)
+			return fmt.Errorf("所属部门的告警群未启用")
+		}
+		if department.RobotID == 0 {
+			logger.Warnf("alert notification skipped: alert_id=%d department_id=%d reason=no alert group is configured", row.ID, departmentID)
+			return fmt.Errorf("所属部门尚未配置告警群")
 		}
 		robotID = department.RobotID
 		dutyUser = strings.TrimSpace(string(department.DutyUserID))
 	}
-	if robotID == 0 {
-		return
+	route := "department"
+	if departmentID == 0 {
+		route = "fallback"
 	}
+	deviceID := uint(0)
+	if device != nil {
+		deviceID = device.ID
+	}
+	logger.Infof("routing alert notification: alert_id=%d alert_type=%s device_id=%d department_id=%d route=%s im_id=%d", row.ID, row.AlertType, deviceID, departmentID, route, robotID)
 	message = appendDutyMention(message, dutyUser)
 	if err := s.notifier.Notify(context.Background(), robotID, message); err != nil {
 		logger.Warnf("send alert notification failed: alert_id=%d department_id=%d error=%v", row.ID, departmentID, err)
+		return fmt.Errorf("发送告警群消息失败：%w", err)
 	}
+	return nil
+}
+
+func (s *Service) notifyConfirmedMessage(row *alertmodel.SecurityAlert, by, note string, confirmedAt time.Time) (bool, error) {
+	if s == nil || s.notifier == nil || row == nil {
+		return false, fmt.Errorf("通知服务不可用")
+	}
+	if err := s.notifyMessage(row, by, note, &confirmedAt); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // notificationDevice resolves Cloud SIEM assets again immediately before a
@@ -1453,7 +1554,21 @@ func alertPayloadMap(value any) map[string]any {
 
 // buildSuspiciousAlertMessage 生成安骑士主机安全告警通知。
 // 该格式与历史 warning 项目的通知格式保持一致，字段值来自已经脱敏的 payload。
-func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any) string {
+func buildSuspiciousAlertMessage(item aliyun.SuspEvent, payload map[string]any, devices ...*devicemodel.Device) string {
+	if isRootLoginAlert(item.Title) {
+		var device *devicemodel.Device
+		if len(devices) > 0 {
+			device = devices[0]
+		}
+		return buildLoginAlertMessage(loginAlertInfo{
+			title:      item.Title,
+			severity:   coreSeverityText(normalizeSuspiciousSeverity(item.Level)),
+			providerID: firstNonEmptyMessage(item.ProviderID, item.UniqueInfo),
+			alertTime:  firstNonEmptyMessage(item.LastTime, item.OccurrenceTime),
+			assetName:  item.InstanceName,
+			privateIP:  item.PrivateIP,
+		}, payload, nil, device)
+	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("**❌❌❌❌%s❌❌❌❌**", item.AccountType))
 	writeMarkdownField(&b, "☁ 告警来源", accountEditionText(item.AccountType))
@@ -1815,10 +1930,18 @@ func accountEditionText(accountType string) string {
 	}
 }
 
-func buildConfirmedAlertMessage(row *alertmodel.SecurityAlert) string {
-	if row == nil {
-		return ""
+func (s *Service) alertGroupMessage(row *alertmodel.SecurityAlert, device *devicemodel.Device, by, note string, confirmedAt *time.Time) string {
+	if isLoginGroupAlert(row) {
+		message, _ := s.masker.Apply(loginGroupMessage(row, device, by, note, confirmedAt)).(string)
+		return message
 	}
+	if confirmedAt == nil {
+		return row.LastMessage
+	}
+	return buildConfirmedAlertMessage(row, by, note, *confirmedAt)
+}
+
+func buildConfirmedAlertMessage(row *alertmodel.SecurityAlert, by, note string, confirmedAt time.Time) string {
 	originalMessage := strings.TrimSpace(formatAlertNotificationText(row.LastMessage))
 	originalMessage = ensureAlertSeverity(originalMessage, row.Severity)
 	confirmedMessage := strings.ReplaceAll(originalMessage, "❌", "✅")
@@ -1830,11 +1953,9 @@ func buildConfirmedAlertMessage(row *alertmodel.SecurityAlert) string {
 	}
 	var b strings.Builder
 	b.WriteString(confirmedMessage)
-	writePlainMessageField(&b, "👤 确认人", row.ConfirmedBy)
-	if row.ConfirmedAt != nil {
-		writePlainMessageField(&b, "⏱ 确认时间", row.ConfirmedAt.Format(time.DateTime))
-	}
-	writePlainMessageField(&b, "📝 确认信息", row.ConfirmNote)
+	writePlainMessageField(&b, "👤 确认人", by)
+	writePlainMessageField(&b, "⏱ 确认时间", confirmedAt.Format(time.DateTime))
+	writePlainMessageField(&b, "📝 确认信息", note)
 	return b.String()
 }
 
